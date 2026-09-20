@@ -36,15 +36,15 @@ library(Luminescence)
 
   entry <- get(key, envir = .bin_cache, inherits = FALSE)
 
-  # LRU 갱신
+  # LRU(Least Recently Used, 가장 최근에 사용되지 않은 것) 갱신
   entry$last_used <- Sys.time()
   assign(key, entry, envir = .bin_cache)
 
   entry$value
 }
 
-.bin_cache_put <- function(key, value) {
-  assign(
+.bin_cache_put <- function(key, value) {  # key(경로+mtime+size)를 기준으로 value와 last_used를 .bin_cache에 저장한다. LRU 정책으로 오래된 캐시는 제거.
+  assign(                                 # 업로드 탭, 신호 분석 탭에서 작용한다.
     key,
     list(value = value, last_used = Sys.time()),
     envir = .bin_cache
@@ -272,6 +272,8 @@ load_bin_data <- function(path) {
   result
 }
 
+##====== 여기까지가 모든 단계가 공유하는 공통 로딩/캐시 관련 내용 ======##
+
 # ============================================================
 # Version1: upload & position inspect
 # ============================================================
@@ -333,6 +335,7 @@ inspect_positions <- function(path) {
 #   - R의 warning()은 Streamlit UI까지 올라오지 않고
 #   - 잘라내도 정렬이 복구되는 게 아니라 그냥 틀린 곡선이 그려진다.
 # 조용히 틀린 곡선을 보여주느니 명시적으로 막는다.
+
 .load_position_records <- function(path, pos) {
   loaded <- load_bin_data(path)
 
@@ -394,7 +397,8 @@ inspect_positions <- function(path) {
   )
 }
 
-inspect_rlum_records_by_position <- function(path, pos) {
+inspect_rlum_records_by_position <- function(path, pos) {       # 2.Signal Analysis 탭에서 POSITION 선택했을 때, 그 POSITION에 들어있는 
+                                                                # record들의 목록과 각 record의 메타데이터를 요약하여 반환.
   found <- .load_position_records(path, pos)
 
   pos <- found$pos
@@ -696,9 +700,9 @@ save_rlum_record_plot <- function(path, pos, record_index, output_dir) {
 }
 
 
-# 여러 POSITION에 대해 SAR을 일괄 실행한다.
+# 여러 POSITION에 대해 SAR을 일괄 실행한다. <- 여러개를 지원한다는 뜻, 여러 개일 때만 동작한다는 뜻이 아님.
 #
-# 한 POSITION이 실패해도 전체를 중단하지 않는다.
+#   한 POSITION이 실패해도 전체를 중단하지 않는다.
 #   De 분포를 만들려면 aliquot이 여러 개 필요한데, 그 중 하나가 fit 실패나
 #   multi-GRAIN으로 막힌다고 나머지 정상 결과까지 버리면 분석이 불가능해진다.
 #   실패한 POSITION은 사유와 함께 따로 모아서 UI가 보여줄 수 있게 반환한다.
@@ -937,7 +941,7 @@ analyse_de_distribution <- function(de, de_error, output_dir = NULL, prefix = "d
   # 로그 도메인 임계값과 비교 불가능한 OD를 내놓는다. 그 전에 명시적으로 막는다.
   # 관례상 음수 De는 버리지 않고 unlogged 모델로 다루지만(Galbraith & Roberts 2012),
   # unlogged 경로는 아직 미지원이라 지금은 중단한다.
-  # ponytail: 하드 스톱. single-grain(음수 De 흔함) 지원 시 unlogged MAM/CAM 경로 추가.
+  # single-grain(음수 De 흔함) 지원 시 unlogged MAM/CAM 경로 추가.
   n_nonpositive <- sum(de <= 0)
   if (n_nonpositive > 0) {
     stop(
