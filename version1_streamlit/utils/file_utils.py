@@ -1,4 +1,4 @@
-# app/utils/file_utils.py
+# version1_streamlit/utils/file_utils.py
 
 from datetime import datetime
 import hashlib
@@ -406,7 +406,7 @@ def save_sar_results(analysis_results_dir: Path, result: dict) -> dict:
 # 셀프 체크
 # ============================================================
 # 파일을 지우는 로직이 들어 있으므로 최소 확인 하나를 남긴다.
-# 실행: venv/bin/python app/utils/file_utils.py
+# 실행: venv/bin/python version1_streamlit/utils/file_utils.py
 
 if __name__ == "__main__":
     import tempfile

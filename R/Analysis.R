@@ -1,4 +1,4 @@
-# R/pipeline.R
+# R/Analysis.R
 
 library(Luminescence)
 

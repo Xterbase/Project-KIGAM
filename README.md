@@ -2,98 +2,78 @@
 
 루미네선스(OSL/TL) 연대 해석 워크플로 보조 도구.
 
-분석 파이프라인을 시각화하고, 등가선량(De) 분포의 특성(과분산·왜도·다봉성)을 바탕으로
-통계 연령모델(CAM / MAM / FMM) 선택을 돕는다. 통계 계산 자체는 R `Luminescence`
-패키지가 담당하며, 이 프로젝트는 그 통계를 재구현하지 않는다 — `rpy2`로 R을 호출한다.
+원시 측정 데이터에서 연대 계산까지의 분석 과정을 한곳에 모아 시각화하고, 등가선량(De)
+분포의 특성(과분산·왜도·다봉성)을 근거로 통계 연대모델(CAM / MAM / FMM 등) 선택을 돕는다.
+통계 계산은 R [`Luminescence`](https://cran.r-project.org/package=Luminescence) 패키지가
+담당하며, 이 프로젝트는 그 통계를 재구현하지 않는다.
 
-사용자·소스 주석 소통 언어는 한국어다.
+## 현재 단계
 
-## 무엇을 하는가
+**웹 애플리케이션으로 재구성하는 중이다.** Streamlit으로 만든 첫 버전(ver.1.0)은
+`version1_streamlit/`에 참고용으로 보존하고, 분석 계층(`R/Analysis.R`)을 먼저 다진 뒤
+서버 기반 웹 애플리케이션으로 옮긴다.
 
-원시 데이터 → 신호 분석 → De 분포 분석 → 모델 추천 → (예정) 연령 계산 → 결과·보고서로
-이어지는 워크플로를 단계별 탭으로 제공한다. 목표는 "De 분포를 보고 어떤 모델을 쓸지"라는
-연구자 판단에 남는 불확실성을, 워크플로 표준화·시각화와 근거 있는 추천으로 줄이는 것이다.
+```
+원시 데이터 → 신호 분석 → De 분포 분석 → 모델 추천 → 통계모델 적용 → 연대 계산 → 결과·보고서
+```
 
-**모델 추천은 결정적(deterministic)이다.** 같은 입력 + 같은 임계값이면 항상 같은 모델을
-낸다 — 연대값이 출판되려면 재현 가능해야 하기 때문이다. 추천은 연구자 판단을 대체하지 않고,
-근거 지표를 함께 제시해 돕는 가이드다.
-
-## 현재 상태
-
-| 단계 | 탭 | 상태 |
+| 구성 | 위치 | 상태 |
 |---|---|---|
-| 1 | Data Upload & Inspect | 구현됨 |
-| 2 | Signal Analysis | 구현됨 |
-| 3 | SAR Analysis | 구현됨 (De 값, QC 분류, 성장곡선, CSV) |
-| 4 | De Distribution | 구현됨 (분포 지표 + CAM/MAM/FMM 추천) |
-| 5 | Model Recommendation | 자리표시자 — 추천 로직은 현재 4번 탭 안에 있음 |
+| 분석 계층 | `R/Analysis.R` | 업로드 검사, 신호 곡선, SAR(De·QC 분류), De 분포 분석 구현. 보강 중 |
+| ver.1.0 UI | `version1_streamlit/` | 동작하지만 더 이상 확장하지 않음 |
+| 웹 애플리케이션 | — | 설계 단계 |
 
-### 알려진 한계 (읽고 시작할 것)
+## 설계 원칙
 
-- **다봉 데이터의 MAM/FMM 구분을 아직 신뢰하지 말 것.** 추천 결정 트리가 양의 왜도
-  게이트를 다봉(FMM) 게이트보다 먼저 평가한다. 로그정규 분포는 부분 표백과 무관하게
-  선형 도메인에서 양의 왜도를 갖기 때문에, 진짜 다성분 혼합이 MAM으로 오분류될 수 있다.
-  게이트 순서 변경은 출판되는 연대값에 영향을 주므로 전문가 검토 후로 재설계를 연기했다.
+- **모델 선택은 결정적(deterministic)이다.** 같은 입력과 같은 임계값이면 항상 같은
+  모델을 낸다. 연대값이 출판되려면 재현 가능해야 하기 때문이다. 모델은 문헌 기반 규칙이
+  고르고, 언어 모델은 그 선택의 근거를 문헌과 함께 설명하는 역할에 머문다.
+- **분류하되 조용히 버리지 않는다.** 품질검사에서 탈락한 aliquot도 판정 근거와 함께
+  보관한다. 자동 제외는 결과를 바꾸면서 기록을 남기지 않는 판단이 되기 때문이다.
+- **결과를 바꾸는 파라미터는 결과에 함께 기록한다.** 예: signal/background integral은
+  De를 크게 바꾸지만 측정 파일에는 남지 않으므로 모든 SAR 결과 행에 찍는다.
+
+## 알려진 한계
+
+- **single-grain(한 POSITION에 여러 GRAIN) 파일은 차단된다.** 조용히 틀린 곡선을 그리는
+  것을 막은 상태이며, 지원하는 것이 아니다. 가장 먼저 풀 과제다.
+- **De는 현재 초(s) 단위다.** 선원 선량률(Gy/s)을 적용해야 Gy가 된다. ver.1.0 화면의
+  "Gy" 표기는 틀렸다.
+- **다봉 데이터의 MAM/FMM 구분을 아직 신뢰하지 말 것.** 추천 규칙이 양의 왜도 게이트를
+  다봉 게이트보다 먼저 평가해, 실제 다성분 혼합이 MAM으로 분류될 수 있다. 출판되는
+  연대값에 영향을 주므로 전문가 검토 후에 고친다.
 - **음수/0 De는 지원하지 않는다.** 로그 기반 모델을 적용할 수 없어 명시적으로 중단한다.
-  관례상 음수 De는 버리지 않고 unlogged 모델로 다루지만(Galbraith & Roberts 2012),
-  그 경로는 아직 미구현이다.
-- **single-grain(multi-GRAIN) 파일은 차단된다.** 조용히 틀린 곡선을 그리는 것을 막은
-  상태이며, 지원한 것이 아니다. MAM/FMM의 주 대상 데이터라 향후 우선 과제다.
 
 ## 요구 사항
 
-- Python 3.14 (프로젝트 자체 virtualenv 사용)
-- R 설치 + `Luminescence` 패키지 (시스템에 설치되어 있어야 `rpy2`가 호출 가능)
-
-R 쪽 준비:
+- R + `Luminescence` 패키지
+- Python 3.14 (ver.1.0 앱과 셀프 체크용, 프로젝트 자체 virtualenv)
 
 ```r
 install.packages("Luminescence")
 ```
 
-## 설치 · 실행
-
 ```bash
-source venv/bin/activate          # virtualenv 활성화
-pip install -r requirements.txt   # 의존성 설치/갱신
-streamlit run app/main.py         # 앱 실행 (주 진입점)
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt   # pandas, rpy2, streamlit
 ```
-
-`requirements.txt`는 코드가 실제로 import하는 것만 담는다(`pandas`, `rpy2`, `streamlit`).
-
-## 구조
-
-`rpy2`로 이어지는 3계층. 데이터는 **UI → utils → R** 방향으로 흐른다.
-
-```
-app/main.py            Streamlit 진입: 페이지 설정, 사이드바, 5개 워크플로 탭
-  └─ app/tabs/         탭당 모듈 하나 (upload / signal / sar / de 구현됨)
-       └─ app/utils/   브리지 + 상태 계층
-            └─ R/pipeline.R   Luminescence 패키지 안에서 도는 R 함수들
-```
-
-- **`app/utils/r_runner.py`** — R로 들어가는 유일한 통로. rpy2는 스레드 안전하지 않아
-  모든 R 접근은 여기의 잠금(`R_LOCK`) 패턴을 통해야 한다. 탭에서 직접 R을 부르지 말 것.
-- **`R/pipeline.R`** — 분석 함수. Risø `.bin`/`.rda`/`.rdata`를 읽고, 위치·레코드를
-  요약하고, 곡선을 그리고, SAR와 De 분포 분석을 수행한다.
-- **`app/utils/state_manager.py`** — 파이프라인을 의존 그래프가 있는 stage로 모델링한다.
-  한 stage의 입력이 바뀌면 그 stage의 출력과 그것에 (직·간접으로) 의존하는 모든 stage가
-  무효화된다. stage를 추가하려면 `SESSION_SCHEMA`에 `depends_on`과 함께 항목만 추가하면 된다.
-- **`app/utils/file_utils.py`** — 업로드·결과 저장. 분석 결과는 세션 상태만이 아니라
-  디스크(`outputs/samples/{sample_id}/`)에도 반드시 기록한다(프로젝트 요구사항).
-
-더 자세한 설계 배경과 함정은 `CLAUDE.md`에 있다.
 
 ## 검증
 
-테스트 프레임워크·린터는 두지 않는다. 대신 각 `app/utils/` 모듈이 `__main__`에
-`assert` 기반 셀프 체크를 담는다. 직접 실행한다:
+테스트 프레임워크 대신 각 모듈의 `__main__`에 `assert` 기반 셀프 체크가 있다.
+`r_runner.py`의 셀프 체크가 `R/Analysis.R`을 Luminescence 내장 예제 데이터
+(`CWOSL.SAR.Data`)로 실행해 검증하므로, 저장소에 측정 데이터가 필요 없다.
 
 ```bash
-venv/bin/python app/utils/state_manager.py
-venv/bin/python app/utils/model_recommend.py
-venv/bin/python app/utils/r_runner.py     # R + Luminescence 설치 필요, 약 2초
+venv/bin/python version1_streamlit/utils/r_runner.py        # R 설치 필요, 약 2초
+venv/bin/python version1_streamlit/utils/model_recommend.py
+venv/bin/python version1_streamlit/utils/file_utils.py
 ```
 
-`r_runner.py`의 셀프 체크는 Luminescence 내장 예제(`CWOSL.SAR.Data`)로 픽스처를
-그때그때 생성하므로 저장소에 커밋된 데이터가 필요 없다.
+ver.1.0 화면을 직접 보려면:
+
+```bash
+streamlit run version1_streamlit/main.py
+```
+
+측정 데이터(`*.bin`, `*.rda` 등)는 저장소에 커밋하지 않는다.

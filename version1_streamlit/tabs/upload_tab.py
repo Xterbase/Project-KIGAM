@@ -1,4 +1,4 @@
-# app/tabs/upload_tab.py
+# version1_streamlit/tabs/upload_tab.py
 
 from __future__ import annotations
 
@@ -117,7 +117,7 @@ def render_upload_tab(output_dir: Path) -> None:
     역할:
         1. BIN/RDA/RData 파일 업로드
         2. outputs/samples/{sample_id}/raw 아래에 파일 저장
-        3. R pipeline으로 파일 구조 및 POSITION 정보 확인
+        3. R(Analysis.R)로 파일 구조 및 POSITION 정보 확인
         4. current_sample, position_result를 session_state에 저장
     """
 
@@ -186,7 +186,7 @@ def render_upload_tab(output_dir: Path) -> None:
     st.markdown("### POSITION 확인")
 
     st.write(
-        "업로드된 파일을 R pipeline으로 읽고 metadata, record type, POSITION 정보를 확인합니다."
+        "업로드된 파일을 R(Analysis.R)로 읽고 metadata, record type, POSITION 정보를 확인합니다."
     )
 
     if st.button("POSITION 확인하기", type="primary"):

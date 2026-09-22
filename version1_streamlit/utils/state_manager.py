@@ -1,4 +1,4 @@
-# app/utils/state_manager.py
+# version1_streamlit/utils/state_manager.py
 
 from __future__ import annotations
 
@@ -436,7 +436,7 @@ def reset_all_state() -> None:
 # 10. 셀프 체크
 # ============================================================
 # 분기가 있는 로직이므로 최소 확인 하나를 남긴다.
-# 실행: venv/bin/python app/utils/state_manager.py
+# 실행: venv/bin/python version1_streamlit/utils/state_manager.py
 
 if __name__ == "__main__":
     init_session_state()

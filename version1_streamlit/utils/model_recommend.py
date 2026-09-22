@@ -1,4 +1,4 @@
-# app/utils/model_recommend.py
+# version1_streamlit/utils/model_recommend.py
 """De 분포 지표 -> CAM/MAM/FMM 추천 (결정적).
 
 재현성 제약이 이 모듈의 존재 이유다. 같은 입력 + 같은 임계값이면 항상 같은 모델을
@@ -122,7 +122,7 @@ def recommend_age_model(od_rel: float | None, skewness: float | None, n: int, fm
 # 셀프 체크
 # ============================================================
 # 분기 트리 + 경계값이 있으므로 각 가지와 경계를 확인한다.
-# 실행: venv/bin/python app/utils/model_recommend.py
+# 실행: venv/bin/python version1_streamlit/utils/model_recommend.py
 
 if __name__ == "__main__":
     # fixture(ExampleData.DeValues, sigmab=0.15)에서 확인한 실제 지표로 회귀 고정.

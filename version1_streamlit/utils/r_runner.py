@@ -12,12 +12,12 @@ from rpy2.robjects import default_converter
 # 1. 경로 설정 및 기본 함수
 ## 프로젝트 경로 설정
 BASE_DIR = Path(__file__).resolve().parents[2]
-R_PIPELINE_PATH = BASE_DIR / "R" / "pipeline.R"
+R_ANALYSIS_PATH = BASE_DIR / "R" / "Analysis.R"
 
 
 ## rpy2를 위한 안전설정
 R_LOCK = Lock()
-_PIPELINE_LOADED = False
+_ANALYSIS_LOADED = False
 
 
 ## VECTOR -> LIST
@@ -104,31 +104,31 @@ def r_scalar_float(r_vector) -> float | None:
 # ========================================================================================================================
 
 # version1: upload data
-## R pipeline.R 파일 로드
-def load_r_pipeline() -> None:
+## R Analysis.R 파일 로드
+def load_r_analysis() -> None:
     """
-    R/pipeline.R 파일을 R 환경에 source 한다.
+    R/Analysis.R 파일을 R 환경에 source 한다.
     여러 번 호출되어도 한 번만 로드되도록 처리한다.
     """
-    global _PIPELINE_LOADED
+    global _ANALYSIS_LOADED
 
-    if _PIPELINE_LOADED:
+    if _ANALYSIS_LOADED:
         return
     
 
-    if not R_PIPELINE_PATH.exists():
-        raise FileNotFoundError(f"pipeline.R을 찾을 수 없습니다: {R_PIPELINE_PATH}")
+    if not R_ANALYSIS_PATH.exists():
+        raise FileNotFoundError(f"Analysis.R을 찾을 수 없습니다: {R_ANALYSIS_PATH}")
 
-    r_path = R_PIPELINE_PATH.as_posix()
+    r_path = R_ANALYSIS_PATH.as_posix()
 
     with R_LOCK:
-        if _PIPELINE_LOADED:
+        if _ANALYSIS_LOADED:
             return
 
         with default_converter.context():
             ro.r["source"](r_path)
 
-        _PIPELINE_LOADED = True
+        _ANALYSIS_LOADED = True
 
 
 ## R의 inspect_positions() 호출 후 Python dict로 변환
@@ -136,7 +136,7 @@ def inspect_uploaded_file(path: str | Path) -> dict:
     """
     업로드된 BIN/RDA/RData 파일을 R 함수 inspect_positions()로 검사한다.
 
-    R pipeline:
+    R (Analysis.R):
     - inspect_positions(path)
       - 내부에서 load_bin_data(path) 호출
       - 파일 정보, POSITION 정보, record type 정보 반환
@@ -144,7 +144,7 @@ def inspect_uploaded_file(path: str | Path) -> dict:
     Python return:
     - Streamlit에서 바로 쓰기 좋은 dict
     """
-    load_r_pipeline()
+    load_r_analysis()
 
     file_path = Path(path).resolve()
 
@@ -190,7 +190,7 @@ def inspect_rlum_records(path: str | Path, position: int) -> dict:
     """
     선택한 POSITION의 RLum record 목록을 R 함수 inspect_rlum_records_by_position()로 조회한다.
 
-    R pipeline:
+    R (Analysis.R):
     - inspect_rlum_records_by_position(path, pos)
       - 내부에서 load_bin_data(path) 호출
       - POSITION에 해당하는 metadata row와 RLum record 정보를 반환
@@ -198,7 +198,7 @@ def inspect_rlum_records(path: str | Path, position: int) -> dict:
     Python return:
     - Streamlit에서 record table/selectbox에 바로 쓰기 좋은 dict
     """
-    load_r_pipeline()
+    load_r_analysis()
 
     file_path = Path(path).resolve()
 
@@ -267,10 +267,10 @@ def generate_rlum_record_plot(
     """
     선택한 POSITION의 특정 record 하나를 plot_RLum으로 PNG 저장한다.
 
-    R pipeline:
+    R (Analysis.R):
     - save_rlum_record_plot(path, pos, record_index, output_dir)
     """
-    load_r_pipeline()
+    load_r_analysis()
 
     file_path = Path(path).resolve()
     output_dir = Path(output_dir).resolve()
@@ -310,7 +310,7 @@ def run_sar_analysis(
     """
     선택한 POSITION들에 대해 SAR 분석을 일괄 실행하고 De 값을 얻는다.
 
-    R pipeline:
+    R (Analysis.R):
     - run_sar_analysis(path, positions, signal_integral, background_integral)
       - integral 문자열 파싱/검증은 R에서 수행
       - POSITION 하나가 실패해도 나머지는 계속 진행하고, 실패 사유를 따로 반환
@@ -319,7 +319,7 @@ def run_sar_analysis(
     - aliquots: POSITION별 결과 행 리스트 (De 분포 단계의 입력)
     - failed:   실패한 POSITION과 사유
     """
-    load_r_pipeline()
+    load_r_analysis()
 
     file_path = Path(path).resolve()
 
@@ -440,7 +440,7 @@ def analyse_de_distribution(
     De 값 분포의 특성(과분산/왜도/첨도)을 계산하고, FMM 성분 수별 BIC 비교로
     다봉성 근거를 낸다. output_dir이 있으면 radial/abanico plot도 저장한다.
 
-    R pipeline:
+    R (Analysis.R):
     - analyse_de_distribution(de, de_error, output_dir, prefix): 분포 지표 + plot
     - fit_finite_mixture(de, de_error, sigmab): 성분 수별 BIC (다봉성 판정용)
 
@@ -455,7 +455,7 @@ def analyse_de_distribution(
     Python return:
     - 분포 지표(dict) + sigmab + "fmm"(BIC 비교 dict 또는 None) + "fmm_error"
     """
-    load_r_pipeline()
+    load_r_analysis()
 
     if len(de) != len(de_error):
         raise ValueError(
@@ -553,7 +553,7 @@ def analyse_de_distribution(
 # 검증 데이터는 저장소에 없다(outputs/는 git에서 제외). Luminescence가
 # 들고 있는 CWOSL.SAR.Data 예제를 그때그때 임시 폴더에 써서 쓴다.
 #
-# 실행: venv/bin/python app/utils/r_runner.py   (약 2초)
+# 실행: venv/bin/python version1_streamlit/utils/r_runner.py   (약 2초)
 
 def _write_fixture(target_dir: Path) -> Path:
     """Luminescence 예제 데이터를 rda로 저장해 검증용 입력을 만든다."""
@@ -752,7 +752,7 @@ if __name__ == "__main__":
             assert f.exists() and f.stat().st_size > 0, \
                 f"CA1 {key} PNG가 없거나 비어 있다"
 
-        # 결정 로직까지 이은 전체 사슬. self-check는 app/utils 컨텍스트에서 돌아가므로
+        # 결정 로직까지 이은 전체 사슬. self-check는 version1_streamlit/utils 컨텍스트에서 돌아가므로
         # model_recommend를 직접 import 한다 (운영 코드는 r_runner가 이걸 import 하지 않는다).
         from model_recommend import recommend_age_model
 
