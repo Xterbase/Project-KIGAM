@@ -54,7 +54,7 @@ file, `README.md`, code comments, or commit messages.
   commit them. Keep one issue list (the planning doc); do not start dated note files.
 
 The target data is **single-grain** (one grain per hole on a multi-hole disc, hundreds to
-thousands of grains per sample), which the current code blocks (see Current state). "Single aliquot" in
+thousands of grains per sample); both modes are handled by `run_sar_analysis(mode=)`. "Single aliquot" in
 the requirements means a *multi-grain* aliquot: one De per disc. SAR is the protocol for
 both.
 
@@ -67,21 +67,26 @@ From `루미네선스_분석패키지_검토.html` (Luminescence 1.2.1 installed
   `calc_MaxDose`, `calc_AverageDose`, `calc_IEU`, `calc_FuchsLang2001`,
   `calc_WodaFuchs2008`, `calc_EED_Model`), 2 fading corrections, 3 distribution
   diagnostics, single-grain helpers (`subset_SingleGrainData`, `verify_SingleGrainData`,
-  `convert_SG2MG`, `plot_SingleGrainDisc`), and all dashboard plots.
+  `convert_SG2MG`, `plot_SingleGrainDisc`), and all dashboard plots. `convert_SG2MG`
+  **sums the signals** of all grains on a disc into one synthetic aliquot (then SAR gives
+  one De per disc); it does not average grain De values.
 - **Package choice does not decide accuracy.** The same estimator (e.g. Galbraith 1999
   CAM) gives the same answer in any package. Accuracy is decided by three researcher
   judgments — integral choice (~15% De shift), which grains are kept, and which model
   is applied. Each added package adds a fourth: "which package was used".
 - **Conditional adoption** (add only when the condition actually occurs):
 
-  | Condition | Add |
-  |---|---|
-  | Model choice needs quantitative backing | numOSL `sensSAM` |
-  | ML estimates insufficient for MAM/FMM uncertainty | numOSL `mcMAM`, `mcFMM` |
-  | Medium/slow component contamination found in real data | `OSLdecomposition` (works on Luminescence objects) |
-  | DRAC's external transfer is not allowed | numOSL `calDA` (offline) |
+  | Condition | Add | Plugs in at (stage, see Code as it stands) |
+  |---|---|---|
+  | Model choice needs quantitative backing | numOSL `sensSAM` | between ④ and ⑤ — backs the rule pick, does not replace it |
+  | ML estimates insufficient for MAM/FMM uncertainty | numOSL `mcMAM`, `mcFMM` | ⑤, beside `calc_MinDose` / `calc_FiniteMixture` (comparison, not replacement) |
+  | Medium/slow component contamination found in real data | `OSLdecomposition` | between ② and ③: `RLum.OSL_global_fitting` → `RLum.OSL_decomposition` returns `RLum.Analysis` meant for `analyse_SAR.CWOSL`; replaces the channel-integral signal, so stamp it on results |
+  | DRAC's external transfer is not allowed | numOSL `calDA` (offline) | ⑥, instead of `use_DRAC()` |
 
-  numOSL has its own BIN loader and S3 classes, so it needs a conversion layer.
+  The numOSL functions above take a two-column (De, error) matrix — `cbind(de, de_error)`;
+  `calDA` takes numeric inputs (U/Th/K, grain size, water content, depth, location). A
+  conversion layer is needed only if numOSL's own BIN pipeline were used, which is not
+  planned. Neither numOSL nor OSLdecomposition is installed yet.
   **DRAC is a web service, not a package**: `use_DRAC()` sends sample data to Durham's
   server — check the institution's data policy first. RLumShiny is a GUI layer (a design
   reference for which parameters to expose), not an analysis supplement.
@@ -98,16 +103,49 @@ notably the source dose rate, without which De stays in seconds. Do not guess th
 Decide these before hardening `Analysis.R`'s public functions, since each one changes their
 signatures:
 
-- **Output contract.** Current functions take a file *path* and write *PNGs* to disk. A web
-  dashboard may instead need plot *data* (to draw client-side) or served images. Pick one
-  before polishing the plotting functions.
-- **R bridge.** Python backend + `rpy2` (in-process, single-threaded R — needs a lock or one
-  R process per worker) vs an R-native HTTP layer (e.g. `plumber`, one R process per
-  worker). This decides whether `r_runner.py` survives.
-- **Execution model.** SAR runs serially per POSITION. At single-grain scale (thousands of
-  grains) the runtime is unmeasured; if it is minutes, the web layer needs background jobs
-  with progress.
-- **Frontend stack.** Open; wait for the server details.
+- **Output contract — decided (2026-09-24): R returns plot *data*; the browser draws.** The
+  researchers find the plots of their current tools and of R hard to read, so the frontend
+  draws richer, colour-coded charts. `R/run.R` is the only interface:
+  `Rscript R/run.R input.json output.json`, input `{"action", "args"}`, output
+  `{"ok", "action", "result" | "error", "meta"}`, exit 0/1 (the file is written either way).
+  Actions: `inspect`, `curve`, `sar`, `dose_response`, `age_model`. JSON rules the browser
+  relies on: array fields stay arrays even with one element (`I()`), tables are arrays of row
+  objects, NA/NaN/Inf become `null`, numbers are not rounded. The PNG functions
+  (`save_rlum_record_plot`, `plot_dir`, radial/abanico `output_dir`) remain only for the
+  legacy Streamlit app — do not build on them.
+  - Chart data sources: `get_record_curve()` (②), `get_dose_response()` (③, same data and
+    seed as `run_sar_analysis()`, so De matches the table), `analyse_de_distribution()`'s
+    `radial_x/radial_y` (④, Galbraith radial coordinates around the CAM centre).
+  - The dose-response `curve_x/curve_y` evaluate Luminescence's `Formula`, whose
+    coefficients are rounded to 3 significant digits — display only (~0.03% off at De);
+    De itself comes from the unrounded fit.
+  - `inspect` returns every record row (~240 KB for 882 records). A full single-grain file
+    (~86,000 records) would be ~24 MB — paginate or filter before that reaches a browser.
+- **R bridge — decided (2026-09-24): PHP calls `Rscript` per request (approach A).** The
+  server runs nginx + Apache + PHP; SSH is the admin channel only, not the request path.
+  Request flow: browser → nginx → Apache → PHP → `Rscript R/run.R` → `R/Analysis.R`.
+  No Python backend is planned, so `r_runner.py` does not survive into the web build.
+  `model_recommend.py`'s rules move to R, so selection is reproducible in one place.
+  Consequences:
+  - Each request is a fresh R process, so the in-memory `.bin_cache` only helps within one
+    request. Cache the parsed `Risoe.BINfileData` to disk (`saveRDS`/`readRDS`, keyed like
+    `.bin_cache`) and reuse stage outputs from the sample folder, invalidated by
+    dependency as in `state_manager.py`. Move to a resident R process (`plumber`) only if
+    measured load times demand it.
+  - Pass user input to R with `escapeshellarg()` or a JSON file, never interpolated into
+    a shell string.
+  - Measure on the server: BIN parse vs `readRDS` time, and full single-grain SAR runtime.
+    If SAR exceeds PHP's execution limit, run it as a background job with progress.
+- **Execution model.** SAR runs serially per unit (POSITION, or POSITION + GRAIN);
+  `run_sar_analysis(progress_file=)` rewrites `{"done", "total"}` JSON atomically after each
+  unit, for the web layer's progress bar. At single-grain scale (thousands of
+  grains) the runtime is unmeasured on the server; if it is minutes, the web layer needs
+  background jobs with progress. Local trial: ~0.04–0.06 s per grain SAR, so ~4,800 grains
+  ≈ 3–5 min serial — above PHP's default 30 s limit.
+- **Frontend stack.** PHP renders pages (HTML/CSS/JS in the browser); the JS/UI approach
+  beyond that is open. Decided: no separate SAR screen —
+  SAR exists to feed the De distribution, so its results (De, QC verdicts) are shown within
+  the distribution view.
 - **LLM layer.** RAG over an OCR'd luminescence-literature corpus that *explains* the
   rule-picked model with citations. Its interaction shape (free prompt vs structured
   narration) is not decided — do not assume a chat UI.
@@ -117,58 +155,90 @@ signatures:
 The project virtualenv (Python 3.14) is still used for the legacy code and the self-checks:
 
 ```bash
+Rscript R/selfcheck.R                                       # analysis-layer self-check (~15 s)
 source venv/bin/activate
-venv/bin/python version1_streamlit/utils/r_runner.py        # R + Luminescence self-check (~2 s)
+venv/bin/python version1_streamlit/utils/r_runner.py        # legacy self-check (~2 s)
 venv/bin/python version1_streamlit/utils/model_recommend.py
 venv/bin/python version1_streamlit/utils/file_utils.py
 venv/bin/python version1_streamlit/utils/state_manager.py   # Streamlit-specific
 streamlit run version1_streamlit/main.py                    # legacy ver.1.0 UI, reference only
 ```
 
-There is no test suite or linter. `r_runner.py`'s self-check is currently the only
-automated test of `Analysis.R`; it generates its own R fixture from the installed package,
-so it needs no committed data. `rpy2` needs a working R with `Luminescence` installed.
+There is no test suite or linter. `R/selfcheck.R` is the analysis layer's test and runs the
+way the web layer will (`Rscript`); it builds its fixture from the installed package, so it
+needs no committed data. `r_runner.py`'s self-check is legacy — keep it passing while the
+Streamlit app remains, but add new checks to `R/selfcheck.R`. `rpy2` needs a working R with
+`Luminescence` installed.
 
 ## Code as it stands
 
 ```
-R/Analysis.R                     analysis functions inside Luminescence  ← the focus now
+R/Analysis.R                     entry point: library() + sources the stage files  ← the focus now
+R/01_load.R                      ① path → Risoe.BINfileData; file cache; .save_png helper
+R/02_signal.R                    ② POSITION → RLum.Analysis records, curve plots
+R/03_sar.R                       ③ RLum.Analysis + integrals → De table + QC
+R/04_distribution.R              ④ De table → OD, skewness, FMM BIC, radial/abanico
+R/05_models.R                    ⑤ De table → rule recommendation → CAM/MAM/FMM dose (run_age_model)
+                                 ⑥ dose rate & age: not written (dose rate pending)
+R/run.R                          web entry point: JSON in → action → JSON out (the PHP ↔ R contract)
+R/selfcheck.R                    analysis-layer self-check (Rscript), including run.R round trips
 version1_streamlit/              the ver.1.0 app, moved intact (imports are relative to it)
-  utils/r_runner.py              the only crossing point into R (rpy2)   ← fate depends on the R bridge
+  utils/r_runner.py              the only crossing point into R (rpy2)   ← not carried into the web build
   utils/file_utils.py            sample_id + per-sample folder layout, CSV output
-  utils/model_recommend.py       deterministic CAM/MAM/FMM rules (pure Python)
+  utils/model_recommend.py       the same rules in Python — legacy; the R copy in 05_models.R leads
   main.py, tabs/, utils/state_manager.py   Streamlit UI
 ```
 
 `r_runner.py` resolves `R/Analysis.R` as `parents[2]` of itself, so keep
-`version1_streamlit/` directly under the repo root or that path breaks.
+`version1_streamlit/` directly under the repo root or that path breaks. `Analysis.R` finds
+the stage files next to itself (innermost `source()` frame's `ofile`), so it must be loaded
+with `source()`.
 
-### `R/Analysis.R` — things that bite
+### `R/` analysis layer — things that bite
 
 It reads Risø `.bin` / `.rda` / `.rdata` into `Risoe.BINfileData` (`load_bin_data`,
 LRU-cached), summarizes positions/records, plots curves, runs SAR, and analyses the De
 distribution. Validation and error messages live in R and surface as exceptions.
 
-- **macOS quartz png writes the file only at `dev.off()`.** Close the device right after
-  drawing, then check `file.exists()`; keep `on.exit` only as a leak guard.
-- **`analyse_SAR.CWOSL()` takes vectors**: `signal_integral = c(1, 2)`,
-  `background_integral = c(900, 1000)` — not the old `signal.integral.min/max` form.
+- **macOS quartz png writes the file only at `dev.off()`.** `.save_png()` (`01_load.R`)
+  closes the device right after drawing, then checks `file.exists()`; `on.exit` is only a
+  leak guard. Save every PNG through it.
+- **`analyse_SAR.CWOSL()` takes the channels themselves**: `signal_integral = 1:2`,
+  `background_integral = 900:1000`. `c(900, 1000)` means channels 900 and 1000 only — the
+  code passed that form until 2026-09-24, so the background used 2 channels instead of 101
+  (Luminescence warned "please check your input"; example POSITION 1 De 1661.3 → 1668.3 s,
+  one more aliquot fails QC). `.parse_integral()` returns `c(start, end)` for stamping;
+  `.run_sar_one()` expands it with `seq()`.
+- **SAR warnings are captured per unit** into the result's `warning` column instead of
+  being lost on the console. A QC-passing grain can still carry one (e.g. a zero Lx/Tx
+  point, so the dose-response fit ignored its weights) — show it next to that grain.
 - **De comes out in seconds, not Gy.** Regeneration doses (`IRR_TIME`) are in seconds and no
   `dose_rate_source` is passed. Passing the source dose rate (Gy/s) to
   `analyse_SAR.CWOSL(dose_rate_source=)` converts De and the dose-response x-axis together.
-  Five `Gy` labels in the code (`sar_tab.py`, `de_tab.py`, `r_runner.py`, `Analysis.R`) are
+  Five `Gy` labels in the code (`sar_tab.py`, `de_tab.py`, `r_runner.py`, `04_distribution.R`) are
   currently wrong.
 - **`Risoe.BINfileData2RLum.Analysis()` returns a list per GRAIN, not per record.** With
-  several GRAINs under one POSITION, `length(obj)` is the GRAIN count.
-  `.load_position_records()` validates this in one place and `stop()`s — **multi-GRAIN
-  (single-grain) files are blocked, not supported.** This is the first thing to unblock:
-  both measurement modes depend on it (`convert_SG2MG()` builds aliquot mode on top).
+  several GRAINs under one POSITION, `length(obj)` is the GRAIN count and record indices
+  point at grains. `.position_records(bin_data, pos, grain)` is the one place that loads
+  records: single-grain files need `grain`; a multi-GRAIN POSITION without it `stop()`s.
+  A file is single-grain when any `GRAIN > 0` (single-aliquot files record `GRAIN = 0`).
+- **Measurement modes.** `run_sar_analysis(mode = "single_grain")` runs SAR per
+  (POSITION, GRAIN); `"single_aliquot"` runs it per POSITION, first applying
+  `convert_SG2MG()` when the file is single-grain. Results carry `mode`, `grain`, and a
+  per-disc summary (`disc_n_units`, `disc_n_accepted`).
+- **SAR results are random unless seeded.** `analyse_SAR.CWOSL()` estimates De error by
+  Monte Carlo, and the "Palaeodose error" QC criterion uses it — unseeded, a borderline
+  grain flipped between pass and fail across seeds (up to 84% De-error change on dim
+  grains). `run_sar_analysis()` seeds each unit (`seed`, stamped on results), so a verdict
+  does not depend on which other units were selected.
 - **The `.bin_cache` key is `path + mtime + size` only.** If an object picker is added (an
   `.rda` may hold several `Risoe.BINfileData`), `object_name` must join the key.
 - **Batch stages collect per-item failures instead of aborting.** `run_sar_analysis`
   returns `failed_position` + `failed_reason`, so one bad aliquot doesn't discard the rest.
 - **Integral defaults are file-dependent.** `900:1000` assumes 1000 channels; read
-  `NPOINTS` instead.
+  `NPOINTS` instead. Single-grain laser files can start with laser-off channels (the local
+  test files: channels 1–5 are background, signal starts at 6), so a fixed early-channel
+  default integrates no signal and every grain fails QC.
 
 ### `r_runner.py` (while rpy2 is the bridge)
 
@@ -218,8 +288,19 @@ rule-based recommendation in `model_recommend.py`.
 
 Known defects to resolve in the analysis-first phase:
 
-- **Single-grain files are blocked** (above) — yet they are the target data.
+- **Single-grain QC uses Luminescence's default rejection criteria** — the researchers'
+  selection criteria are pending.
 - **De unit** is seconds (above) — needs the dose rate.
+- **Stage ⑤ is a first draft for researcher review.** `run_age_model()` picks the model by
+  rule (or takes the user's, recorded as `model_source`) and applies it. FMM returns every
+  component and does not pick one — which component dates the event is a depositional
+  judgment. sigmab is an explicit input: 0.20 for single grains is literature-backed
+  (well-bleached single-grain quartz OD ~20%, Arnold & Roberts 2009); 0.15 for aliquots is
+  the legacy default and unconfirmed.
+- **No minimum sample size gates the recommendation.** With the local files, 3–4 accepted
+  De reach ⑤ and get a CAM dose; that is computable but statistically weak. Only the
+  mathematical floors are enforced (De > model parameters; FMM with k components needs 2k
+  De). A threshold must come from the researchers, not be guessed.
 - **Recommendation gate order is wrong for multimodal data.** The positive-skew (MAM) gate
   runs before the multimodality (FMM) gate, and skewness is computed on raw De, where a
   lognormal is always right-skewed — so genuine 2–3 component mixtures are classified MAM.
@@ -229,8 +310,13 @@ Known defects to resolve in the analysis-first phase:
 - **Scale is untested**: 24 POSITIONs today vs thousands of grains.
 
 **Verification baseline** (for spotting drift): `ExampleData.BINfileData`
-(`CWOSL.SAR.Data`) has 24 POSITIONs; a clean SAR run gives 24/24 analysed, 22 passing QC
-(POSITIONs 8 and 11 fail), De 684–1905 **s** (seconds — see the unit note), CV ~17%.
-`r_runner.py`'s self-check asserts per-POSITION De ranges from this baseline, regenerating
-the fixture from the installed package. Local test inputs (`test_data/`, including
-hand-made multi-GRAIN and subset `.bin` files) are gitignored and for manual testing only.
+(`CWOSL.SAR.Data`) has 24 POSITIONs; a clean SAR run (`1:2` / `900:1000`, seed 1) gives
+24/24 analysed, 21 passing QC (POSITIONs 8, 11, 22 fail; 22 on recycling ratio 1.114 > 1.1),
+De 673.1–1883.3 **s** (seconds — see the unit note), CV ~17%; the 21 accepted give OD 18.9%
+→ CAM 1391.9 ± 58.4 s. `ExampleData.DeValues`: CA1 → FMM (k = 3, ΔBIC 95.5), BT998 → CAM
+2936 s. `R/selfcheck.R` asserts all of this. Local test inputs (`test_data/`) are gitignored
+and never committed: hand-made multi-GRAIN and subset `.bin` files, plus two real
+single-grain files (`bin.BIN`, `bin2.BIN`: 49 grains each, laser off in channels 1–5). With
+integrals `6:10` / `81:100` and seed 1, single-grain mode passes 4 and 3 grains;
+single-aliquot mode passes discs 1, 7, 8 and 5, 7, 8. `R/selfcheck.R` asserts these when
+the files exist.
