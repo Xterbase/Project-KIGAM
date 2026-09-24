@@ -1,8 +1,8 @@
-# R/04_distribution.R — ④ 분포 진단: De 표 -> OD, 왜도/첨도, FMM BIC, radial/abanico plot.
+# R/04_distribution.R — ④ 분포 진단: De 표 -> OD, 왜도/첨도, FMM BIC, 방사형 그래프 좌표.
 # numOSL sensSAM(조건부 도입)은 이 단계의 지표와 ⑤ 연령 모델 사이, 모델 선택 근거로 들어간다.
 # ============================================================
-# SAR에서 나온 De 모음(De 값 + 오차)을 받아 분포 특성을 계산하고,
-# radial/abanico plot을 PNG로 저장한다. 여기서 나온 지표(OD, 왜도, 다봉성)가
+# SAR에서 나온 De 모음(De 값 + 오차)을 받아 분포 특성과 방사형 그래프 좌표를 계산한다.
+# 여기서 나온 지표(OD, 왜도, 다봉성)가
 # 다음 단계(CAM/MAM/FMM 추천)의 입력이다.
 #
 # 통계는 Luminescence 패키지 함수를 그대로 쓴다(프로젝트 원칙: 재구현하지 않는다):
@@ -15,9 +15,7 @@
 # 없음을 fixture(BT998, n=25)로 확인했다. 따라서 다봉성 판정은 정석 방법으로
 # 다음 단계(모델 추천)에서 처리하고, 이 함수는 OD/왜도/첨도 같은 견고한 지표만 낸다.
 
-# output_dir을 주면 radial/abanico PNG를 저장한다. 안 주면 지표만 계산한다
-# (r_runner self-check처럼 그림이 필요 없는 호출을 위해).
-analyse_de_distribution <- function(de, de_error, output_dir = NULL, prefix = "de_dist") {
+analyse_de_distribution <- function(de, de_error) {
   # --- 입력 검증 ---
   de <- as.numeric(de)
   de_error <- as.numeric(de_error)
@@ -79,29 +77,6 @@ analyse_de_distribution <- function(de, de_error, output_dir = NULL, prefix = "d
   # --- 왜도/첨도 ---
   stats <- calc_Statistics(data)
 
-  # --- plot 저장 (output_dir 있을 때만) ---
-  radial_file <- NA_character_
-  abanico_file <- NA_character_
-
-  if (!is.null(output_dir) && !is.na(output_dir) && nzchar(output_dir)) {
-    if (!dir.exists(output_dir)) {
-      dir.create(output_dir, recursive = TRUE)
-    }
-
-    output_dir <- normalizePath(output_dir, winslash = "/", mustWork = TRUE)
-
-    radial_file <- .save_png(
-      file.path(output_dir, paste0(prefix, "_radial.png")),
-      function() plot_RadialPlot(data),
-      width = 1400, height = 1000, res = 150, label = "De 분포 plot"
-    )
-
-    abanico_file <- .save_png(
-      file.path(output_dir, paste0(prefix, "_abanico.png")),
-      function() plot_AbanicoPlot(data),
-      width = 1400, height = 1000, res = 150, label = "De 분포 plot"
-    )
-  }
 
   list(
     n = as.integer(n),
@@ -124,9 +99,6 @@ analyse_de_distribution <- function(de, de_error, output_dir = NULL, prefix = "d
     mean_de = as.numeric(stats$unweighted$mean),
     median_de = as.numeric(stats$unweighted$median),
     sd_rel = as.numeric(stats$unweighted$sd.rel),
-
-    radial_plot_file = as.character(radial_file),
-    abanico_plot_file = as.character(abanico_file),
 
     # 브라우저에서 그릴 데이터. de/de_error는 NA를 거른 뒤의 값(radial과 같은 순서).
     # 방사형 그래프(Galbraith 1988) 좌표: z = log(De), s = 상대오차(De.Error/De),

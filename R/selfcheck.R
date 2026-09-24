@@ -16,8 +16,6 @@ expect_error <- function(expr, pattern) {
   stopifnot("에러가 나야 하는데 통과했다" = !is.na(msg), grepl(pattern, msg))
 }
 
-png_ok <- function(f) file.exists(f) && file.info(f)$size > 0
-
 # ------------------------------------------------------------
 # 1. single-aliquot 기준선 (패키지 예제 데이터로 fixture 생성)
 # ------------------------------------------------------------
@@ -32,8 +30,7 @@ stopifnot(
 )
 
 progress <- file.path(tmp, "progress.json")
-sar <- run_sar_analysis(fixture, 1:24, "1:2", "900:1000",
-                        plot_dir = file.path(tmp, "sar"), progress_file = progress)
+sar <- run_sar_analysis(fixture, 1:24, "1:2", "900:1000", progress_file = progress)
 
 stopifnot(
   "24/24 분석" = sar$n_success == 24,
@@ -45,7 +42,6 @@ stopifnot(
   # 적분 구간을 c(시작, 끝)로 넘기면 두 채널만 적분되고 이 경고가 난다(과거 결함).
   "적분 구간 경고 없음" = !any(grepl("please check your input", sar$warning)),
   "single-aliquot는 grain NA" = all(is.na(sar$grain)),
-  "dose-response PNG" = png_ok(sar$plot_file[1]),
   "진행률 파일 완료 표시" = identical(readLines(progress), '{"done": 24, "total": 24}')
 )
 
@@ -54,8 +50,8 @@ expect_error(
   "GRAIN 번호가 기록된 파일에서만"
 )
 
-curve <- save_rlum_record_plot(fixture, 1, 2, file.path(tmp, "curve"))
-stopifnot("곡선 PNG" = png_ok(curve$plot_file))
+curve <- get_record_curve(fixture, 1, 2)
+stopifnot("곡선 데이터" = length(curve$x) == length(curve$y) && length(curve$x) > 1)
 
 cat("[OK] single-aliquot 기준선\n")
 
@@ -88,13 +84,13 @@ for (case in sg_cases) {
 
   # grain이 여러 개인 디스크는 GRAIN 없이 요청하면 막혀야 한다(곡선 어긋남 방지).
   p_multi <- as.integer(names(which(table(info$grain_position) > 1))[1])
-  expect_error(inspect_rlum_records_by_position(f, p_multi), "GRAIN을 지정해야")
+  expect_error(get_record_curve(f, p_multi, 1), "GRAIN을 지정해야")
 
-  recs <- inspect_rlum_records_by_position(f, p1, grain = g1)
-  stopifnot("grain 하나의 record" = recs$n_records %in% c(16L, 18L), recs$grain == g1)
+  recs <- .load_position_records(f, p1, grain = g1)
+  stopifnot("grain 하나의 record" = length(recs$obj) %in% c(16L, 18L), recs$grain == g1)
 
-  curve <- save_rlum_record_plot(f, p1, 1, file.path(tmp, "sg_curve"), grain = g1)
-  stopifnot("grain 곡선 PNG" = png_ok(curve$plot_file), grepl("_grain_", curve$plot_file))
+  curve <- get_record_curve(f, p1, 1, grain = g1)
+  stopifnot("grain 곡선 데이터" = curve$grain == g1 && length(curve$y) == 100)
 
   a <- run_sar_analysis(f, info$positions, "6:10", "81:100", mode = "single_grain")
   a_de <- a$de[a$rc_status == "OK"]

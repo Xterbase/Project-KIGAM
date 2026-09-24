@@ -55,48 +55,18 @@
 
 # 분석 단위 하나(single-aliquot: POSITION, single-grain: POSITION+GRAIN)에 대해
 # SAR을 돌리고 필요한 값만 뽑는다. found는 .position_records()의 반환값이다.
-#
-# plot_dir을 주면 dose-response plot을 PNG로 저장한다.
-# 이때 analyse_SAR.CWOSL()을 두 번 부르지 않는다.
-#   plot=TRUE로 png device 안에서 한 번만 돌리면 반환 객체와 PNG를 동시에 얻는다.
-#   (plot=FALSE로 표를 뽑고 plot=TRUE로 그림을 다시 그리면 같은 계산을 두 번 한다)
-.dose_plot_name <- function(pos, grain) {
-  if (is.na(grain)) {
-    sprintf("position_%03d_dose_response.png", pos)
-  } else {
-    sprintf("position_%03d_grain_%03d_dose_response.png", pos, grain)
-  }
-}
-
-.run_sar_one <- function(found, signal_integral, background_integral, plot_dir = NULL) {
-  pos <- found$pos
-
-  plot_file <- NA_character_
-  want_plot <- !is.null(plot_dir) && !is.na(plot_dir) && nzchar(plot_dir)
+.run_sar_one <- function(found, signal_integral, background_integral) {
 
   # signal_integral/background_integral은 c(시작, 끝)이다. analyse_SAR.CWOSL()은 "적분할
   # 채널들의 벡터"를 받으므로 c(900, 1000)을 넘기면 900번·1000번 두 채널만 적분한다.
   # 반드시 시작:끝 전체를 넘긴다.
-  run_sar <- function() {
-    analyse_SAR.CWOSL(
-      object = found$obj,
-      signal_integral = seq(signal_integral[1], signal_integral[2]),
-      background_integral = seq(background_integral[1], background_integral[2]),
-      plot = want_plot,
-      verbose = FALSE
-    )
-  }
-
-  if (want_plot) {
-    res <- NULL
-    plot_file <- .save_png(
-      file.path(plot_dir, .dose_plot_name(pos, found$grain)),
-      function() res <<- run_sar(),
-      width = 1400, height = 1000, res = 150, label = "dose-response plot"
-    )
-  } else {
-    res <- run_sar()
-  }
+  res <- analyse_SAR.CWOSL(
+    object = found$obj,
+    signal_integral = seq(signal_integral[1], signal_integral[2]),
+    background_integral = seq(background_integral[1], background_integral[2]),
+    plot = FALSE,
+    verbose = FALSE
+  )
 
   if (is.null(res)) {
     stop("SAR 분석이 결과를 반환하지 않았습니다.")
@@ -152,8 +122,6 @@
     n_n = as.numeric(get_one("n_N")),
     recycling_ratio = pick_rc("Recycling ratio"),
     recuperation = pick_rc("Recuperation"),
-    plot_file = as.character(plot_file),
-
     qc_criteria = qc_criteria,
     qc_value = qc_value,
     qc_threshold = qc_threshold,
@@ -236,7 +204,7 @@
 # 통과/탈락을 오간다(실측: 49 grain 중 1개가 시드에 따라 뒤집힘). 단위마다 같은
 # 시드를 걸어, 함께 선택된 다른 단위와 무관하게 판정이 재현되게 하고 결과에 기록한다.
 run_sar_analysis <- function(path, positions, signal_integral, background_integral,
-                             plot_dir = NULL, mode = "single_aliquot",
+                             mode = "single_aliquot",
                              progress_file = NULL, seed = 1L) {
   loaded <- load_bin_data(path)
 
@@ -263,13 +231,6 @@ run_sar_analysis <- function(path, positions, signal_integral, background_integr
   sig <- integrals$sig
   bg <- integrals$bg
 
-  if (!is.null(plot_dir) && nzchar(plot_dir)) {
-    if (!dir.exists(plot_dir)) {
-      dir.create(plot_dir, recursive = TRUE)
-    }
-
-    plot_dir <- normalizePath(plot_dir, winslash = "/", mustWork = TRUE)
-  }
 
   # ------------------------------------------------------------
   # 분석 단위 구성
@@ -296,7 +257,6 @@ run_sar_analysis <- function(path, positions, signal_integral, background_integr
   ok_n_n <- numeric(0)
   ok_recycling <- numeric(0)
   ok_recuperation <- numeric(0)
-  ok_plot_file <- character(0)
   ok_warning <- character(0)
 
   # QC 표는 단위당 여러 행이므로 position/grain 컬럼을 붙여 길게 쌓는다.
@@ -326,7 +286,7 @@ run_sar_analysis <- function(path, positions, signal_integral, background_integr
       withCallingHandlers(
         .run_sar_one(
           .position_records(bin_data, pos, if (is.na(grain)) NULL else grain),
-          sig, bg, plot_dir
+          sig, bg
         ),
         warning = function(w) {
           unit_warnings <<- c(unit_warnings, conditionMessage(w))
@@ -346,16 +306,6 @@ run_sar_analysis <- function(path, positions, signal_integral, background_integr
         trimws(as.character(attr(one, "condition")$message))
       )
 
-      # 실패 도중 device가 열렸다 닫히며 남은 빈 PNG는 지운다.
-      # 남겨두면 "plot이 있으니 성공했다"고 오해할 수 있다.
-      if (!is.null(plot_dir) && nzchar(plot_dir)) {
-        stale <- file.path(plot_dir, .dose_plot_name(pos, grain))
-
-        if (file.exists(stale)) {
-          unlink(stale)
-        }
-      }
-
       next
     }
 
@@ -368,7 +318,6 @@ run_sar_analysis <- function(path, positions, signal_integral, background_integr
     ok_n_n <- c(ok_n_n, one$n_n)
     ok_recycling <- c(ok_recycling, one$recycling_ratio)
     ok_recuperation <- c(ok_recuperation, one$recuperation)
-    ok_plot_file <- c(ok_plot_file, one$plot_file)
     ok_warning <- c(ok_warning, paste(unique(unit_warnings), collapse = " | "))
 
     n_rows <- length(one$qc_criteria)
@@ -417,7 +366,6 @@ run_sar_analysis <- function(path, positions, signal_integral, background_integr
     n_n = as.numeric(ok_n_n),
     recycling_ratio = as.numeric(ok_recycling),
     recuperation = as.numeric(ok_recuperation),
-    plot_file = as.character(ok_plot_file),
     warning = as.character(ok_warning),
 
     qc_position = as.integer(qc_position),

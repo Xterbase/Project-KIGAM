@@ -61,12 +61,12 @@ recommend_age_model <- function(od_rel, skewness, n, fmm = NULL) {
       "과분산 %.1f%% 높으나 유의한 왜도·다봉 근거 없음 → CAM(과분산 큼에 유의)", od_rel
     ))
     if (is.null(fmm)) {
-      reasons <- c(reasons, "FMM 미적합(표본 부족 등)으로 다봉성은 확인하지 못했습니다")
+      reasons <- c(reasons, "FMM 미적합(표본 부족 등)으로 다봉성 확인 못 함")
     }
   }
 
   if (!skew_known && od_rel >= th$od_low_pct) {
-    reasons <- c(reasons, "왜도를 계산할 수 없어(분산 부족 등) 부분 표백(MAM) 판정은 건너뛰었습니다")
+    reasons <- c(reasons, "왜도 계산 불가(분산 부족 등)로 부분 표백(MAM) 판정 건너뜀")
   }
 
   list(
@@ -189,9 +189,8 @@ apply_age_model <- function(de, de_error, model, sigmab = NULL, n_components = N
 # ④ 지표 -> FMM BIC -> 규칙 추천 -> 모델 적용.
 # model을 주면 추천과 다른 모델을 적용하되, 무엇이 추천이었고 누가 골랐는지 함께 남긴다.
 # FMM이 실패(표본 부족·미수렴)해도 멈추지 않는다: 추천 규칙은 "FMM 없음"을 처리한다.
-run_age_model <- function(de, de_error, sigmab, model = NULL, max_k = 4L,
-                          output_dir = NULL, prefix = "de_dist") {
-  dist <- analyse_de_distribution(de, de_error, output_dir = output_dir, prefix = prefix)
+run_age_model <- function(de, de_error, sigmab, model = NULL, max_k = 4L) {
+  dist <- analyse_de_distribution(de, de_error)
 
   fmm <- tryCatch(fit_finite_mixture(de, de_error, sigmab = sigmab, max_k = max_k),
                   error = function(e) e)

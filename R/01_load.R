@@ -1,11 +1,11 @@
 # R/01_load.R — ① 로드: 파일 경로 -> Risoe.BINfileData.
-# 모든 단계가 공유하는 파일 캐시와 PNG 저장 헬퍼도 여기 둔다.
+# 모든 단계가 공유하는 파일 캐시도 여기 둔다.
 
 # ============================================================
 # Common: 로드된 파일 캐시
 # ============================================================
-# load_bin_data()는 inspect_positions / inspect_rlum_records_by_position /
-# save_rlum_record_plot 등 모든 진입점의 첫 줄에서 호출된다.
+# load_bin_data()는 inspect_positions / get_record_curve / run_sar_analysis 등
+# 모든 진입점의 첫 줄에서 호출된다.
 # 캐시가 없으면 record를 하나 클릭할 때마다 BIN 파일 전체를 다시 파싱하므로,
 # 실제 크기의 측정 파일에서는 클릭마다 수 초씩 멈춘다.
 #
@@ -67,14 +67,6 @@
   invisible(value)
 }
 
-clear_bin_cache <- function() {
-  rm(
-    list = ls(.bin_cache, all.names = TRUE),
-    envir = .bin_cache
-  )
-
-  invisible(TRUE)
-}
 
 # ============================================================
 # Common: data loading
@@ -286,34 +278,6 @@ load_bin_data <- function(path) {
   .bin_cache_put(cache_key, result)
 
   result
-}
-
-# ============================================================
-# Common: PNG 저장
-# ============================================================
-# plot 하나를 PNG로 저장하고 정규화 경로를 돌려준다.
-# macOS quartz png는 dev.off() 시점에야 파일을 디스크에 쓴다. dev.off()를 on.exit에만
-# 걸어두면 파일이 아직 없는 상태에서 존재 확인이 실패한다.
-# -> draw() 직후 명시적으로 닫아 flush 하고, on.exit은 에러 시 device 누수 방지용으로만 둔다.
-
-.save_png <- function(file_path, draw, width, height, res, label) {
-  png(filename = file_path, width = width, height = height, res = res)
-
-  device_id <- dev.cur()
-  on.exit(
-    if (dev.cur() == device_id) dev.off(),
-    add = TRUE
-  )
-
-  draw()
-
-  dev.off()
-
-  if (!file.exists(file_path)) {
-    stop(paste0(label, " 이미지를 생성하지 못했습니다: ", file_path))
-  }
-
-  normalizePath(file_path, winslash = "/", mustWork = TRUE)
 }
 
 # ============================================================

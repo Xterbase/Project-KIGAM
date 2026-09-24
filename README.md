@@ -1,4 +1,6 @@
-# LumiGuide
+# Luminous
+
+> 가칭. 2026-09-24에 LumiGuide에서 이름을 바꿨으며, 최종 이름은 정해지지 않았다.
 
 루미네선스(OSL/TL) 연대 해석 워크플로 보조 도구.
 
@@ -92,18 +94,7 @@ echo '{"action": "inspect", "args": {"path": "/path/to/file.bin"}}' > in.json
 Rscript R/run.R in.json out.json     # 성공 0, 실패 1. out.json에 결과 또는 에러
 ```
 
-ver.1.0(레거시) 셀프 체크:
-
-```bash
-venv/bin/python version1_streamlit/utils/r_runner.py        # R 설치 필요, 약 2초
-venv/bin/python version1_streamlit/utils/model_recommend.py
-venv/bin/python version1_streamlit/utils/file_utils.py
-```
-
-ver.1.0 화면을 직접 보려면:
-
-```bash
-streamlit run version1_streamlit/main.py
-```
+ver.1.0(레거시)은 참고용으로만 보관한다. 2026-09-24에 분석 계층에서 그림(PNG) 저장 함수를
+지웠기 때문에 ver.1.0 화면과 `r_runner.py` 셀프 체크는 더 이상 현재 R 코드로 실행되지 않는다.
 
 측정 데이터(`*.bin`, `*.rda` 등)는 저장소에 커밋하지 않는다.
