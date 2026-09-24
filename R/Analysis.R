@@ -15,7 +15,8 @@ library(Luminescence)
 local({
   # 이 파일의 위치 = 가장 안쪽 source() 프레임의 ofile. 작업 디렉터리나
   # 다른 스크립트 안에서 source() 됐는지(중첩)와 무관하게 동작해야 한다.
-  ofiles <- Filter(Negate(is.null), lapply(sys.frames(), function(f) f$ofile))
+  ofiles <- Filter(Negate(is.null), lapply(sys.frames(), function(f) f$ofile))  # "지금 실행 중인 이 파일은 어디에 있는가?" 
+  # sys.frames(): 현재 호출 스택에 쌓인 함수 프레임 목록
   here <- dirname(normalizePath(ofiles[[length(ofiles)]], winslash = "/"))
 
   for (f in c("01_load.R", "02_signal.R", "03_sar.R", "04_distribution.R", "05_models.R")) {

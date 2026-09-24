@@ -1,7 +1,7 @@
 # R/02_signal.R — ② 신호: 선택한 POSITION의 RLum record 목록과 신호 곡선.
 # 연구자가 곡선을 보고 signal/background integral을 정하는 단계다.
 #
-#   get_record_curve()  record 하나의 곡선을 그래프용 데이터로 반환(브라우저가 그림)
+#   get_record_curve() : record 하나의 곡선을 그래프용 데이터로 반환(브라우저가 그림)
 #
 # OSLdecomposition(조건부 도입)은 이 단계와 ③ SAR 사이에 들어간다.
 # ---------------------------
@@ -22,7 +22,7 @@
 # bin_data를 직접 받는 이유: single-aliquot 모드는 파일이 아니라 convert_SG2MG()로
 # 변환한 객체에서 record를 꺼내야 한다.
 
-.position_records <- function(bin_data, pos, grain = NULL) {
+.position_records <- function(bin_data, pos, grain = NULL) {   # position(+grain)의 record를 꺼내고 정렬이 맞는지 검증
   metadata <- bin_data@METADATA
 
   pos <- as.integer(pos)
@@ -33,7 +33,7 @@
   }
 
   grains <- sort(unique(metadata$GRAIN[in_pos]))
-  grains <- grains[!is.na(grains)]
+  grains <- grains[!is.na(grains)]  #GRAIN이 비어있는 행을 대비한 방어코드
 
   if (is.null(grain)) {
     if (length(grains) > 1) {
@@ -46,7 +46,7 @@
         )
       )
     }
-
+# position에 grain이 2개 이상이면 즉시 stop(). grain을 지정하지 않으면 record_index와 실제 곡선이 어긋나기때문.
     metadata_index <- which(in_pos)
     obj <- Risoe.BINfileData2RLum.Analysis(object = bin_data, pos = pos)
   } else {
@@ -63,6 +63,10 @@
   meta_pos <- metadata[metadata_index, , drop = FALSE]
   label <- if (is.null(grain)) paste0("POSITION ", pos) else paste0("POSITION ", pos, " GRAIN ", grain)
 
+
+## 최종검증: metadata 행 순서와 RLum record 순서가 1:1로 맞는지 확인.
+# (1) 반환값이 list가 아니라 Rlum.Analysis 하나인지,
+# (2) metadata_index와 obj 길이가 같은지 확인.(=표의 행 순서와 RLum record 순서가 1:1로 맞는지 확인)
   if (length(obj) == 0) {
     stop(paste0(label, "의 RLum record를 찾지 못했습니다."))
   }
@@ -88,7 +92,7 @@
   )
 }
 
-.load_position_records <- function(path, pos, grain = NULL) {
+.load_position_records <- function(path, pos, grain = NULL) {  #경로를 받아 .position_records()를 호출(bin_data 캐시).
   .position_records(load_bin_data(path)$bin_data, pos, grain)
 }
 
@@ -97,6 +101,7 @@
 
 
 # record 하나의 곡선을 그래프용 데이터로 반환한다(브라우저가 그린다).
+# 하나의 곡선 x,y를 브라우저용으로 반환.
 # x는 OSL/IRSL이면 자극 시간(s), TL이면 온도(°C)다. record_type으로 구분한다.
 get_record_curve <- function(path, pos, record_index, grain = NULL) {
   found <- .load_position_records(path, pos, grain)

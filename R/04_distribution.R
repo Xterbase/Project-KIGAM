@@ -52,9 +52,10 @@ analyse_de_distribution <- function(de, de_error) {
 
   # 음수/0 De는 로그 기반 모델(CAM/MAM/FMM)을 적용할 수 없다. calc_CentralDose는
   # log=TRUE 기본에서 음수를 만나면 콘솔 경고만 남기고 조용히 선형 모드로 강등해
-  # 로그 도메인 임계값과 비교 불가능한 OD를 내놓는다. 그 전에 명시적으로 막는다.
-  # 관례상 음수 De는 버리지 않고 unlogged 모델로 다루지만(Galbraith & Roberts 2012),
-  # unlogged 경로는 아직 미지원이라 지금은 중단한다.
+  # 로그 도메인 임계값과 비교 불가능한 OD를 내놓는다. 
+  
+  # 그 전에 명시적으로 막는다. 관례상 음수 De는 버리지 않고 unlogged 모델로 다루지만(Galbraith & Roberts 2012), unlogged 경로는 아직 미지원이라 지금은 중단한다.
+  
   # single-grain(음수 De 흔함) 지원 시 unlogged MAM/CAM 경로 추가.
   n_nonpositive <- sum(de <= 0)
   if (n_nonpositive > 0) {
@@ -100,7 +101,8 @@ analyse_de_distribution <- function(de, de_error) {
     median_de = as.numeric(stats$unweighted$median),
     sd_rel = as.numeric(stats$unweighted$sd.rel),
 
-    # 브라우저에서 그릴 데이터. de/de_error는 NA를 거른 뒤의 값(radial과 같은 순서).
+    ## 브라우저에서 그릴 데이터. 
+    # de/de_error는 NA를 거른 뒤의 값(radial과 같은 순서).
     # 방사형 그래프(Galbraith 1988) 좌표: z = log(De), s = 상대오차(De.Error/De),
     #   x = 1/s(정밀도), y = (z - log(CAM 중심값)) / s(표준화 거리).
     # 원점에서 같은 직선 위의 점은 같은 De다. 통계가 아니라 표시용 좌표 변환이다.
@@ -115,15 +117,16 @@ analyse_de_distribution <- function(de, de_error) {
 # ------------------------------------------------------------
 # FMM 다봉성 판정용 BIC 비교
 # ------------------------------------------------------------
-# calc_FiniteMixture로 성분 수 k=2..max_k를 적합하고, 단일성분(k=1) 대비
-# BIC를 비교한다. "다봉이다"라는 판정 자체는 여기서 하지 않는다 — 그 임계값은
-# 추천 로직(model_recommend.py) 소관이고, 이 함수는 비교에 필요한 BIC만 낸다.
+# calc_FiniteMixture로 성분 수 k=2..max_k를 적합하고, 단일성분(k=1) 대비 BIC를 비교한다. 
+# "다봉이다"라는 판정 자체는 여기서 하지 않는다 — 그 임계값은 추천 로직(model_recommend.py) 소관이고, 이 함수는 비교에 필요한 BIC만 낸다.
+
 # 이산 혼합 여부를 성분 수별 BIC로 고르는 것은 OSL 문헌의 표준이다
 # (Galbraith & Green 1990; Roberts et al. 2000; David et al. 2007).
 #
 # sigmab(성분 내 과분산 가정치)에 결과가 민감하다. CA1 fixture에서 sigmab
-# 0.15면 다성분, 0.30이면 단일성분으로 판정이 뒤집힌다. 그래서 sigmab을 인자로
-# 받아 반환값에 실어, 어떤 값으로 판정했는지 기록에 남긴다.
+# 0.15면 다성분, 0.30이면 단일성분으로 판정이 뒤집힌다. 
+
+# 그래서 sigmab을 인자로 받아 반환값에 실어, 어떤 값으로 판정했는지 기록에 남긴다.
 .fmm_max_k <- function(n) as.integer(n %/% 2L)
 
 fit_finite_mixture <- function(de, de_error, sigmab = 0.15, max_k = 4L) {

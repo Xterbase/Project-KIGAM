@@ -14,7 +14,7 @@
 #
 # Risoe.BINfileData 객체는 메모리를 많이 쓰므로 최근 N개만 유지한다(LRU).
 
-.bin_cache <- new.env(parent = emptyenv())
+.bin_cache <- new.env(parent = emptyenv())  # 같은 .bin파일을 두번 파싱하지 않기 위해
 .BIN_CACHE_MAX_ENTRIES <- 3L
 
 .bin_cache_key <- function(normalized_path) {
@@ -27,6 +27,9 @@
     sep = "|"
   )
 }
+# 20~29행의 실제 키는,
+# /Users/.../R/01_load.R|1790251574.50434|10194
+#           경로        |  수정 시각(초) | 크기(바이트)
 
 .bin_cache_get <- function(key) {
   if (!exists(key, envir = .bin_cache, inherits = FALSE)) {
