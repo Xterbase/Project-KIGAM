@@ -197,7 +197,7 @@ php/bridge.php                   run_r() (Rscript call), sample_dir() (id check)
 web/index.php                    upload (BIN/RDA → outputs/samples/{id}/raw/) + inspect + sample list
 web/dashboard.php                one sample's dashboard shell; loads inspect.json, the rest via api.php
 web/api.php                      fetch → whitelisted action/args → run.R → JSON (sar/age_model results kept)
-web/assets/                      app.js (charts, SAR form), app.css (Operate-style tokens), vendor/plotly
+web/assets/                      app.js (charts, SAR form), app.css (Operate-style tokens), vendor/plotly, fonts/ (Pretendard, OFL)
 version1_streamlit/              the ver.1.0 app, moved intact (imports are relative to it)
   utils/r_runner.py              the only crossing point into R (rpy2)   ← not carried into the web build
   utils/file_utils.py            sample_id + per-sample folder layout, CSV output

@@ -1,6 +1,22 @@
 /* web/assets/app.css — Luminous 공통 스타일(Operate 스타일 참조: 세이지 캔버스, 헤어라인, 초록 단색 계열).
    색은 여기 :root 한곳에서만 정한다. app.js의 그래프도 같은 변수를 읽는다. */
 
+/* Pretendard(SIL OFL, fonts/LICENSE.txt): 영문·한글을 한 글꼴로. 외부 CDN 없이 서버에서 준다.
+   디자인이 쓰는 두 굵기(400, 500)만 둔다. 부분 집합은 자주 쓰는 한글 2,780자라서
+   그 밖의 글자는 다음 글꼴(--font)로 표시됨. 전체가 필요하면 PretendardVariable.woff2(2 MB)로 교체. */
+@font-face {
+  font-family: "Pretendard";
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/Pretendard-Regular.subset.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Pretendard";
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/Pretendard-Medium.subset.woff2") format("woff2");
+}
+
 :root {
   --forest-ink: #09352e;   /* 본문·아이콘·곡선 */
   --bone-white: #ffffff;   /* 카드 면 */
@@ -19,8 +35,7 @@
   --pass: #009e73;
   --fail: #d55e00;
 
-  /* Anthropic Sans는 설치된 기기에서만 적용됨(파일을 배포하지 않음). 한글 글리프가 없어 한글은 다음 글꼴로 표시. */
-  --font: "Anthropic Sans", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
 
   --hairline: inset 0 0 0 0.5px var(--lichen);
   --radius-tag: 4px;
@@ -43,6 +58,7 @@ body {
 }
 
 h1, h2, h3 { font-weight: 500; margin: 0; letter-spacing: 0; }
+b, strong { font-weight: 500; }   /* 굵기는 400·500 두 가지뿐(700을 흉내 낸 가짜 굵게 방지) */
 h1 { font-size: 32px; line-height: 1.17; }
 h2 { font-size: 20px; line-height: 1.35; margin-bottom: 12px; }
 h3 { font-size: 16px; line-height: 1.44; margin: 20px 0 8px; }

@@ -14,10 +14,8 @@ define('RSCRIPT', getenv('RSCRIPT') ?: 'Rscript');
 
 const ALLOWED_EXT = ['bin', 'rda', 'rdata'];
 
-// 샘플 id와 업로드 시각이 시간대를 따른다. php.ini에 설정이 없으면(기본 UTC) 한국 시간으로.
-if (!ini_get('date.timezone')) {
-    date_default_timezone_set('Asia/Seoul');
-}
+// 샘플 id와 업로드 시각은 한국 시간. php.ini가 UTC로 정해 둔 서버도 있어 여기서 고정한다.
+date_default_timezone_set('Asia/Seoul');
 
 function h($s): string
 {
