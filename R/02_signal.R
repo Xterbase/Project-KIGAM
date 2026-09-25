@@ -103,8 +103,14 @@
 # record 하나의 곡선을 그래프용 데이터로 반환한다(브라우저가 그린다).
 # 하나의 곡선 x,y를 브라우저용으로 반환.
 # x는 OSL/IRSL이면 자극 시간(s), TL이면 온도(°C)다. record_type으로 구분한다.
-get_record_curve <- function(path, pos, record_index, grain = NULL) {
-  found <- .load_position_records(path, pos, grain)
+# mode = "single_aliquot"이면 SAR이 실제로 쓰는 곡선을 준다: single-grain 파일은
+# convert_SG2MG()로 디스크별 합산한 곡선(grain은 무시). 합산 후 record 순서는 grain 하나와 같다.
+get_record_curve <- function(path, pos, record_index, grain = NULL, mode = NULL) {
+  if (identical(mode, "single_aliquot")) {
+    found <- .position_records(.mode_bin_data(load_bin_data(path), mode), pos)
+  } else {
+    found <- .load_position_records(path, pos, grain)
+  }
   record_index <- as.integer(record_index)
 
   if (record_index < 1 || record_index > length(found$obj)) {

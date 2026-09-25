@@ -148,7 +148,16 @@ signatures:
 - **Frontend stack.** PHP renders pages (HTML/CSS/JS in the browser); the JS/UI approach
   beyond that is open. Decided: no separate SAR screen —
   SAR exists to feed the De distribution, so its results (De, QC verdicts) are shown within
-  the distribution view.
+  the distribution view. Built (2026-09-25): plain JS + Plotly (basic bundle, vendored in
+  `web/assets/vendor/` so the lab network needs no CDN); every chart comes from a live
+  `api.php` → `run.R` call — nothing precomputed. `api.php` passes only whitelisted `args`
+  per action and adds `path` itself, so the browser cannot point R at a server file.
+- **Deployment — decided (2026-09-25): `git clone` on the lab server, updated with
+  `git pull --ff-only`; code is never edited on the server.** Apache's DocumentRoot is `web/`
+  only (the repo root would expose `.git/`, `R/`, and uploaded measurement files in
+  `outputs/`). The web server account needs write access to `outputs/` and `Luminescence`
+  in the *system* R library. Upload size is capped by nginx `client_max_body_size`
+  (default 1 MB) as well as php.ini.
 - **LLM layer.** RAG over an OCR'd luminescence-literature corpus that *explains* the
   rule-picked model with citations. Its interaction shape (free prompt vs structured
   narration) is not decided — do not assume a chat UI.
@@ -160,6 +169,7 @@ code, whose pure-Python checks still pass:
 
 ```bash
 Rscript R/selfcheck.R                                       # analysis-layer self-check (~15 s)
+php -S localhost:8000 -t web -d upload_max_filesize=200M -d post_max_size=200M   # local web app
 source venv/bin/activate
 venv/bin/python version1_streamlit/utils/model_recommend.py
 venv/bin/python version1_streamlit/utils/file_utils.py
@@ -183,6 +193,11 @@ R/05_models.R                    ⑤ De table → rule recommendation → CAM/MA
                                  ⑥ dose rate & age: not written (dose rate pending)
 R/run.R                          web entry point: JSON in → action → JSON out (the PHP ↔ R contract)
 R/selfcheck.R                    analysis-layer self-check (Rscript), including run.R round trips
+php/bridge.php                   run_r() (Rscript call), sample_dir() (id check) — shared by web/, outside DocumentRoot
+web/index.php                    upload (BIN/RDA → outputs/samples/{id}/raw/) + inspect + sample list
+web/dashboard.php                one sample's dashboard shell; loads inspect.json, the rest via api.php
+web/api.php                      fetch → whitelisted action/args → run.R → JSON (sar/age_model results kept)
+web/assets/                      app.js (charts, SAR form), app.css (Operate-style tokens), vendor/plotly
 version1_streamlit/              the ver.1.0 app, moved intact (imports are relative to it)
   utils/r_runner.py              the only crossing point into R (rpy2)   ← not carried into the web build
   utils/file_utils.py            sample_id + per-sample folder layout, CSV output

@@ -31,7 +31,7 @@ R은 그래프를 그림이 아니라 데이터(JSON)로 넘기고 브라우저�
 | 웹 진입점 | `R/run.R` | JSON 입력 → 동작 → JSON 출력 (PHP와 R 사이의 약속) |
 | 분석 계층 진입 | `R/Analysis.R` | 위 단계 파일을 순서대로 불러온다 |
 | ver.1.0 UI | `version1_streamlit/` | 동작하지만 더 이상 확장하지 않음 |
-| 웹 화면(PHP) | — | 설계 단계 |
+| 웹 화면(PHP) | `web/`, `php/bridge.php` | 업로드 → 신호 곡선 → SAR → De 분포 대시보드 → 모델 (프로토타입) |
 
 ## 설계 원칙
 
@@ -93,6 +93,16 @@ Rscript R/selfcheck.R        # 분석 계층 + run.R 왕복, 약 16초
 echo '{"action": "inspect", "args": {"path": "/path/to/file.bin"}}' > in.json
 Rscript R/run.R in.json out.json     # 성공 0, 실패 1. out.json에 결과 또는 에러
 ```
+
+웹 앱 로컬 실행(업로드한 파일은 `outputs/samples/`에 저장되며 커밋되지 않는다):
+
+```bash
+php -S localhost:8000 -t web -d upload_max_filesize=200M -d post_max_size=200M
+```
+
+서버 배포는 `git clone` 후 `git pull --ff-only`로만 갱신하고, 서버에서는 코드를 고치지 않는다.
+웹 서버의 DocumentRoot는 `web/`만 가리켜야 한다(저장소 루트를 가리키면 `.git/`과 업로드된
+측정 파일이 URL로 노출된다).
 
 ver.1.0(레거시)은 참고용으로만 보관한다. 2026-09-24에 분석 계층에서 그림(PNG) 저장 함수를
 지웠기 때문에 ver.1.0 화면과 `r_runner.py` 셀프 체크는 더 이상 현재 R 코드로 실행되지 않는다.

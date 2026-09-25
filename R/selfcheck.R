@@ -92,6 +92,12 @@ for (case in sg_cases) {
   curve <- get_record_curve(f, p1, 1, grain = g1)
   stopifnot("grain 곡선 데이터" = curve$grain == g1 && length(curve$y) == 100)
 
+  # single-aliquot 모드 곡선 = 그 디스크 grain 곡선들의 합(convert_SG2MG).
+  disc <- get_record_curve(f, p_multi, 1, mode = "single_aliquot")
+  gs <- info$grain[info$grain_position == p_multi]
+  summed <- Reduce(`+`, lapply(gs, function(g) get_record_curve(f, p_multi, 1, grain = g)$y))
+  stopifnot("디스크 합산 곡선" = isTRUE(all.equal(disc$y, summed)))
+
   a <- run_sar_analysis(f, info$positions, "6:10", "81:100", mode = "single_grain")
   a_de <- a$de[a$rc_status == "OK"]
   stopifnot(
