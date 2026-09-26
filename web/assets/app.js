@@ -76,7 +76,7 @@ function renderContext() {
   const m = run ? run.meta : B.meta, box = $('context'); box.replaceChildren();
   [['시료 파일', B.file], ['측정 방식', run ? MODE_LABEL[run.mode] : '분석 전'],
    ['신호 구간', run ? run.sig + '번 채널' : '—'], ['배경 구간', run ? run.bg + '번 채널' : '—'],
-   ['sigmab', run ? SIGMAB[run.mode] : '—'], ['단위', '초(s) · 선량률 미입력'],
+   ['sigmab', run ? SIGMAB[run.mode] : '—'], ['분석 소요', run ? run.secs + '초' : '—'], ['단위', '초(s) · 선량률 미입력'],
    ['분석 패키지', `Luminescence ${m.luminescence_version} · R ${m.r_version}`]]
     .forEach(([k, v]) => { const s = el('span', k + ' '); s.append(el('b', v)); box.append(s); });
 }
@@ -99,17 +99,20 @@ function renderFile() {
 
 // ---- 공통: 곡선 그리기(신호 구간은 모스 초록, 배경 구간은 회색 띠)
 function drawCurve(div, c, text, sig, bg) {
-  const x = c.x, dx = x.length > 1 ? (x[1] - x[0]) / 2 : 0.5, shapes = [];
-  const band = (r, color, name) => {
+  const x = c.x, dx = x.length > 1 ? (x[1] - x[0]) / 2 : 0.5, shapes = [], annotations = [];
+  // 신호 띠 안쪽 위는 감쇠 곡선의 피크 자리라 글자가 곡선에 겹친다. 신호 라벨은 띠 오른쪽 바깥(곡선이 떨어진 곳)에 둔다.
+  const band = (r, color, name, outside) => {
     if (!r || r[0] < 1 || r[1] > x.length || r[0] > r[1]) return;
-    shapes.push({ type: 'rect', xref: 'x', yref: 'paper', x0: x[r[0] - 1] - dx, x1: x[r[1] - 1] + dx, y0: 0, y1: 1,
-      fillcolor: color, opacity: 0.3, line: { width: 0 }, label: { text: name, textposition: 'top center', font: { size: 11, color: C.ink } } });
+    const x0 = x[r[0] - 1] - dx, x1 = x[r[1] - 1] + dx, font = { size: 11, color: C.ink };
+    shapes.push({ type: 'rect', xref: 'x', yref: 'paper', x0, x1, y0: 0, y1: 1, fillcolor: color, opacity: 0.3, line: { width: 0 },
+      ...(outside ? {} : { label: { text: name, textposition: 'top center', font } }) });
+    if (outside) annotations.push({ xref: 'x', yref: 'paper', x: x1, y: 1, xanchor: 'left', yanchor: 'top', xshift: 4, text: name, showarrow: false, font });
   };
-  band(sig, C.moss, '신호'); band(bg, C.muted, '배경');
+  band(sig, C.moss, '신호', true); band(bg, C.muted, '배경');
   const tl = /^TL/.test(c.record_type);
   Plotly.react(div, [{ x, y: c.y, customdata: x.map((_, i) => i + 1), mode: 'lines', line: { color: C.ink, width: 1.5 },
     hovertemplate: `채널 %{customdata} · %{x:.2f} ${tl ? '°C' : 's'}<br>%{y} counts<extra></extra>` }],
-  { ...BASE, title: title(text), xaxis: ax({ title: tl ? '온도 (°C)' : '자극 시간 (s)' }), yaxis: ax({ title: '계수 (counts)' }), shapes, showlegend: false }, PC);
+  { ...BASE, title: title(text), xaxis: ax({ title: tl ? '온도 (°C)' : '자극 시간 (s)' }), yaxis: ax({ title: '계수 (counts)' }), shapes, annotations, showlegend: false }, PC);
 }
 
 // ---- 02 신호: 레코드 곡선 보기
@@ -167,8 +170,9 @@ $('runForm').onsubmit = async e => {
     try {
       age = { ok: true, ...(await api('age_model', { de: acc.map(u => u.de), de_error: acc.map(u => u.de_error), sigmab: SIGMAB[mode] })).result };
     } catch (err) { age = { ok: false, error: err.message }; }
-    run = { mode, sig, bg, sar: s.result, age, meta: s.meta };
-    $('runStatus').textContent = `완료 · ${s.result.n_success}/${s.result.n_requested} 분석, QC 통과 ${acc.length} · ${Math.round((Date.now() - t0) / 1000)}초`;
+    // 소요 시간: 버튼을 누른 때부터 SAR + 연령 모델 응답까지(서버의 R 기동 시간 포함, 사용자가 기다린 시간)
+    run = { mode, sig, bg, sar: s.result, age, meta: s.meta, secs: ((Date.now() - t0) / 1000).toFixed(1) };
+    $('runStatus').textContent = `완료 · ${s.result.n_success}/${s.result.n_requested} 분석, QC 통과 ${acc.length} · ${run.secs}초`;
     renderRun();
     location.hash = '#dist';
   } catch (err) {
