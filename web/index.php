@@ -52,15 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// ---- 샘플 목록(최신순). 폴더 이름이 시각으로 시작하므로 이름 역순 = 최신순.
-$samples = [];
-foreach (array_reverse(glob(SAMPLES . '/*', GLOB_ONLYDIR) ?: []) as $d) {
-    $id = basename($d);
-    $meta = read_json($d . '/meta.json');
-    if (sample_dir($id) !== null && $meta !== null) {
-        $samples[] = ['id' => $id] + $meta;
-    }
-}
+$samples = list_samples();
 ?>
 <!doctype html>
 <html lang="ko">
@@ -97,9 +89,7 @@ foreach (array_reverse(glob(SAMPLES . '/*', GLOB_ONLYDIR) ?: []) as $d) {
           <tr>
             <td class="num"><?= h(substr((string) ($s['uploaded_at'] ?? ''), 0, 16)) ?></td>
             <td><?= h($s['original_name'] ?? '') ?></td>
-            <td><?php if (($s['ok'] ?? true) === false): ?><span class="no">읽기 실패</span><?php
-                elseif (isset($s['single_grain'])): ?><?= $s['single_grain'] ? 'single-grain' : 'single-aliquot' ?><?php
-                else: ?>—<?php endif; ?></td>
+            <td><?= sample_mode($s) ?></td>
             <td class="num"><?= h($s['n_positions'] ?? '—') ?></td>
             <td class="num"><?= !empty($s['single_grain']) ? h($s['n_grains']) : '—' ?></td>
             <td><a class="bracket" href="dashboard.php?id=<?= h($s['id']) ?>">열기</a></td>

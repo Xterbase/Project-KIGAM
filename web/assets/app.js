@@ -12,14 +12,16 @@ const C = {
   ink: css('--forest-ink'), pass: css('--pass'), fail: css('--fail'), fit: css('--muted-sage'), data: css('--emerald'),
   natural: css('--indigo-accent'), muted: css('--slate-smoke'), line: css('--lichen'), moss: css('--moss'), font: css('--font'),
 };
-const PC = { responsive: true, displaylogo: false };
+// 기본 도구 막대는 숨긴다. 조작: 드래그 = 상자 확대, 더블클릭 = 원래대로, 도구는 그래프 상자 오른쪽 위의 돋보기·크게 보기뿐.
+const PC = { responsive: true, displaylogo: false, displayModeBar: false, doubleClick: 'reset', showTips: false };
 const AX = { gridcolor: C.line, griddash: 'dot', zeroline: false, linecolor: C.ink, linewidth: 0.5 };
-const ax = o => ({ ...AX, ...o });
+// 축 이름은 눈금 숫자에서 30px 띄운다(그 틈에 확대 가이드 선이 들어감). 왼쪽·아래 여백도 그만큼 넓다.
+const ax = o => ({ ...AX, ...o, ...(typeof o.title === 'string' ? { title: { text: o.title, standoff: 30 } } : {}) });
 const BASE = {
-  margin: { l: 55, r: 15, t: 36, b: 45 }, font: { family: C.font, size: 11, color: C.ink },
-  paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', legend: { orientation: 'h', y: -0.28 },
+  margin: { l: 86, r: 18, t: 40, b: 70 }, font: { family: C.font, size: 12, color: C.ink },
+  paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', legend: { orientation: 'h', y: -0.22 },
 };
-const title = text => ({ text, font: { size: 13 }, x: 0, xanchor: 'left' });
+const title = text => ({ text, font: { size: 14 }, x: 0, xanchor: 'left' });
 
 const SIGMAB = { single_grain: 0.20, single_aliquot: 0.15 };  // 0.20: 문헌 근거, 0.15: 기존 기본값(미확인)
 const MODE_LABEL = { single_grain: 'A · 알갱이별', single_aliquot: 'B · 디스크별' };
@@ -50,7 +52,185 @@ function cached(action, args) {
   if (!cache.has(k)) cache.set(k, api(action, args).catch(e => { cache.delete(k); throw e; }));
   return cache.get(k);
 }
-function plotMessage(div, msg) { const d = $(div); if (window.Plotly) Plotly.purge(d); d.replaceChildren(el('div', msg, 'empty')); }
+function plotMessage(div, msg) {
+  const d = $(div); if (window.Plotly) Plotly.purge(d);   // purge는 이벤트도 지우므로 다음 plot()에서 다시 붙인다
+  d._events = false; hideAxes(d); d.replaceChildren(el('div', msg, 'empty'));
+}
+
+// ---- 그래프 공통: 모든 그리기는 plot()을 거친다. 새로 그리면 확대가 풀리므로 그때의 범위를 '전체 범위'로 기억한다.
+const ICON = {
+  zin: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M10.5 7.5v6M7.5 10.5h6"/></svg>',
+  zout: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M7.5 10.5h6"/></svg>',
+  exp: '<svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>',   // ↗↙ 크게 보기
+  shr: '<svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>',    // ↙↗ 원래 크기
+};
+const gdOf = d => typeof d === 'string' ? $(d) : d;
+const isSide = gd => !!gd.closest('.dash.expanded') && !gd.closest('.big');   // 크게 보기에서 오른쪽 작은 칸
+// 범례는 x축 이름 아래(축에서 78px)에 둔다. Plotly의 범례 위치는 그래프 높이 비율이라 높이에 따라 다시 계산한다.
+// 오른쪽 작은 칸에서는 범례가 축 이름과 겹쳐서 숨긴다.
+function legendLayout(gd) {
+  const on = gd._legend && !isSide(gd), b = on ? 124 : BASE.margin.b, h = Math.max(120, (gd.clientHeight || 380) - BASE.margin.t - b);
+  return { showlegend: on, 'margin.b': b, 'legend.y': -78 / h, 'legend.yanchor': 'top' };
+}
+function plot(div, data, layout) {
+  const gd = gdOf(div);
+  gd._legend = layout.showlegend !== false;
+  const L = legendLayout(gd);
+  const p = Plotly.react(gd, data, { ...layout, showlegend: L.showlegend, margin: { ...BASE.margin, b: L['margin.b'] },
+    legend: { ...BASE.legend, y: L['legend.y'], yanchor: 'top' } }, PC);
+  gd._home = { x: [...gd._fullLayout.xaxis.range], y: [...gd._fullLayout.yaxis.range] };
+  if (!gd._track) addTools(gd);
+  if (!gd._events) {
+    gd._events = true;
+    gd.on('plotly_relayout', () => syncAxes(gd));
+    gd.on('plotly_afterplot', () => syncAxes(gd));   // 크기 변경 뒤에도 눈금·축 이름 위치를 다시 잰다
+  }
+  syncAxes(gd);
+  return p;
+}
+const rangeOf = (gd, a) => [...gd._fullLayout[a + 'axis'].range];
+const isZoomed = (gd, a) => { const h = gd._home[a], c = rangeOf(gd, a), e = (h[1] - h[0]) * 1e-3; return c[0] > h[0] + e || c[1] < h[1] - e; };
+
+// 도구 버튼(돋보기 −/+, 대시보드 네 칸에는 크게 보기)과 두 축의 확대 가이드를 그래프 상자에 한 번만 붙인다.
+function addTools(gd) {
+  const box = gd.parentElement, tools = el('div', null, 'ptools');
+  const btn = (k, tip, fn) => { const b = el('button', null, k); b.type = 'button'; b.innerHTML = ICON[k]; b.title = tip; b.onclick = fn; tools.append(b); return b; };
+  btn('zout', '축소', () => zoomBy(gd, 1.6));
+  btn('zin', '확대(가운데 기준)', () => zoomBy(gd, 1 / 1.6));
+  if (box.parentElement.classList.contains('dash')) btn('exp', '크게 보기', () => toggleBig(box));
+  box.append(tools);
+  gd._track = {};
+  for (const a of ['x', 'y']) {
+    const t = el('div', null, 'axtrack ' + a), th = el('div', null, 'axthumb'), tip = el('div', '끌어서 이동', 'axtip');
+    t.append(th); box.append(t, tip);
+    gd._track[a] = { t, th, tip };
+    dragThumb(gd, a);
+  }
+}
+function hideAxes(gd) { if (gd._track) Object.values(gd._track).forEach(({ t, tip }) => { t.classList.remove('show'); tip.classList.remove('show'); }); }
+
+// 확대된 축에만 가이드(실선 + 점)를 띄운다. 점 = 전체 범위 중 지금 보이는 구간의 가운데.
+// 선 위치 = 축 이름과 눈금 숫자 사이 틈의 가운데(그려진 글자 위치를 재서 정함).
+function syncAxes(gd) {
+  if (!gd._track) return;
+  if (!gd._fullLayout || !gd._home || !gd.data) { hideAxes(gd); return; }
+  const s = gd._fullLayout._size, ox = gd.offsetLeft, oy = gd.offsetTop, B = gd.parentElement.getBoundingClientRect();
+  const rects = q => [...gd.querySelectorAll(q)].map(e => e.getBoundingClientRect()).filter(r => r.width);
+  for (const a of ['x', 'y']) {
+    const { t, th, tip } = gd._track[a], z = isZoomed(gd, a), was = t.classList.contains('show');
+    t.classList.toggle('show', z);
+    if (!z) { tip.classList.remove('show'); continue; }
+    const h = gd._home[a], c = rangeOf(gd, a), span = h[1] - h[0];
+    const mid = (Math.max(0, (c[0] - h[0]) / span) + Math.min(1, (c[1] - h[0]) / span)) / 2;
+    if (a === 'y') {
+      const ticks = rects('.ytick text'), ttl = rects('.g-ytitle text')[0];
+      const tickL = ticks.length ? Math.min(...ticks.map(r => r.left)) - B.left : ox + s.l - 30;
+      const cx = ((ttl ? ttl.right - B.left : tickL - 24) + tickL) / 2;
+      Object.assign(t.style, { left: cx - 8 + 'px', top: oy + s.t + 'px', width: '16px', height: s.h + 'px' });
+      Object.assign(th.style, { left: '8px', top: (1 - mid) * s.h + 'px' });
+      Object.assign(tip.style, { left: cx + 14 + 'px', top: oy + s.t + (1 - mid) * s.h - 11 + 'px' });
+    } else {
+      const ticks = rects('.xtick text'), ttl = rects('.g-xtitle text')[0];
+      const tickB = ticks.length ? Math.max(...ticks.map(r => r.bottom)) - B.top : oy + s.t + s.h + 22;
+      const cy = (tickB + (ttl ? ttl.top - B.top : tickB + 24)) / 2;
+      Object.assign(t.style, { left: ox + s.l + 'px', top: cy - 8 + 'px', width: s.w + 'px', height: '16px' });
+      Object.assign(th.style, { left: mid * s.w + 'px', top: '8px' });
+      Object.assign(tip.style, { left: ox + s.l + mid * s.w - 30 + 'px', top: cy - 36 + 'px' });
+    }
+    if (!was && !gd._tipShown) { gd._tipShown = true; tip.classList.add('show'); setTimeout(() => tip.classList.remove('show'), 2600); }   // 처음 한 번만
+  }
+}
+
+// 점을 끌면 그 축의 보이는 범위가 같은 폭으로 이동. 선의 다른 곳을 누르면 그 자리가 가운데로 오게 이동.
+function dragThumb(gd, a) {
+  const { t, th } = gd._track[a];
+  const len = () => a === 'y' ? t.clientHeight : t.clientWidth;
+  const clampTo = (h, lo, w) => { lo = Math.min(Math.max(lo, h[0]), h[1] - w); return [lo, lo + w]; };
+  let start = null, raf = 0;
+  th.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation(); th.setPointerCapture(e.pointerId); th.classList.add('drag');
+    start = { p: a === 'y' ? e.clientY : e.clientX, r: rangeOf(gd, a) };
+  });
+  th.addEventListener('pointermove', e => {
+    if (!start) return;
+    const h = gd._home[a], d = ((a === 'y' ? start.p - e.clientY : e.clientX - start.p) / len()) * (h[1] - h[0]);
+    const next = clampTo(h, start.r[0] + d, start.r[1] - start.r[0]);
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(() => Plotly.relayout(gd, { [a + 'axis.range']: next }));
+  });
+  const end = () => { start = null; th.classList.remove('drag'); };
+  th.addEventListener('pointerup', end); th.addEventListener('pointercancel', end);
+  t.addEventListener('pointerdown', e => {
+    if (e.target !== t) return;
+    const r = t.getBoundingClientRect(), f = a === 'y' ? 1 - (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width;
+    const h = gd._home[a], c = rangeOf(gd, a), w = c[1] - c[0];
+    tween(gd, { [a]: clampTo(h, h[0] + f * (h[1] - h[0]) - w / 2, w) });
+  });
+}
+
+// 범위를 부드럽게 바꾼다(ease-out 280ms).
+function tween(gd, to) {
+  const from = {}; for (const a in to) from[a] = rangeOf(gd, a);
+  const t0 = performance.now(), ease = k => 1 - (1 - k) ** 3;
+  const step = now => {
+    const k = ease(Math.min(1, (now - t0) / 280)), u = {};
+    for (const a in to) u[a + 'axis.range'] = [0, 1].map(i => from[a][i] + (to[a][i] - from[a][i]) * k);
+    Plotly.relayout(gd, u);
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// 돋보기: 지금 보이는 영역의 가운데를 기준으로 f배. 전체 범위를 넘으면 전체 범위에서 멈춘다.
+function zoomBy(gd, f) {
+  if (!gd.data) return;
+  const to = {};
+  for (const a of ['x', 'y']) {
+    const h = gd._home[a], c = rangeOf(gd, a), mid = (c[0] + c[1]) / 2, w = Math.min((c[1] - c[0]) * f, h[1] - h[0]);
+    const lo = Math.min(Math.max(mid - w / 2, h[0]), h[1] - w);
+    to[a] = [lo, lo + w];
+  }
+  tween(gd, to);
+}
+
+// 크게 보기: 하나는 왼쪽 큰 칸(세 칸 높이), 나머지 셋은 오른쪽 1열. 칸이 바뀌는 움직임은 FLIP으로 부드럽게.
+function toggleBig(box) {
+  const dash = box.parentElement, boxes = [...dash.querySelectorAll(':scope > .plotbox')];
+  const first = boxes.map(b => b.getBoundingClientRect()), on = !box.classList.contains('big');
+  boxes.forEach(b => b.classList.toggle('big', on && b === box));
+  dash.classList.toggle('expanded', on);
+  boxes.forEach(b => {
+    const e = b.querySelector('.ptools .exp'), big = b.classList.contains('big');
+    if (e) { e.innerHTML = ICON[big ? 'shr' : 'exp']; e.title = big ? '원래 크기' : '크게 보기'; }
+    const gd = b.querySelector('.plot');
+    if (gd.data) { Plotly.relayout(gd, legendLayout(gd)); Plotly.Plots.resize(gd); }
+  });
+  if (run) drawRadial(U()[sel]);   // 방사형 호는 영역 크기에 맞춰 다시 계산
+  boxes.forEach((b, i) => {
+    const l = b.getBoundingClientRect(), f = first[i], gd = b.querySelector('.plot');
+    b.animate([{ transformOrigin: 'top left', transform: `translate(${f.left - l.left}px, ${f.top - l.top}px) scale(${f.width / l.width}, ${f.height / l.height})` },
+               { transformOrigin: 'top left', transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.34, 1.2, .64, 1)' });
+    gd.animate([{ opacity: .35 }, { opacity: 1 }], { duration: 480, easing: 'ease-out' }).finished.then(() => syncAxes(gd));   // 움직이는 중에 잰 위치는 틀리므로 끝난 뒤 다시 잰다
+  });
+  if (on) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { const b = document.querySelector('.plotbox.big'); if (b) toggleBig(b); } });
+
+// 그래프 사용법 안내(머리글과 그래프 사이)
+document.querySelectorAll('.howto').forEach(h => h.innerHTML =
+  '<span><b>드래그</b> 그 구간 확대</span>' +
+  '<span>확대 중에는 축 이름과 눈금 사이의 <span class="dotdemo"></span> 점을 끌어 이동</span>' +
+  '<span><b>더블클릭</b> 원래대로</span>' +
+  `<span>${ICON.zout}${ICON.zin} 가운데 기준 축소·확대</span>` +
+  (h.nextElementSibling.classList.contains('dash') ? `<span>${ICON.exp} 크게 보기(나머지는 오른쪽 1열 · Esc로 복귀)</span>` : ''));
+
+// ---- 01 업로드: 다른 파일을 끌어다 놓거나 골라서 올린다(처리는 index.php)
+{
+  const drop = $('drop'), input = drop.querySelector('input'), form = $('upForm');
+  input.onchange = () => { if (input.files.length) { drop.querySelector('b').textContent = input.files[0].name + ' 올리는 중…'; form.submit(); } };
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); input.files = e.dataTransfer.files; input.onchange(); });
+}
 
 // ---- 파일 구성에서 바로 얻는 것
 const byDisc = {};
@@ -62,14 +242,30 @@ const NCH = Math.max(...I.records.filter(r => r.ltype !== 'TL').map(r => r.npoin
 let run = null;   // 마지막 SAR 실행: { mode, sig, bg, sar, age, meta }
 let sel = 0, selToken = 0;
 
-// ---- 탭: 링크(#이름)로 동작하므로 스크립트는 강조 표시와 그래프 크기만 맞춘다.
-function syncNav() {
-  const id = location.hash.slice(1) || 'file';
-  document.querySelectorAll('nav li a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + id));
-  document.querySelectorAll('#' + id + ' .plot').forEach(p => { if (window.Plotly && p.data) Plotly.Plots.resize(p); });
-  if (id === 'dist' && run) drawRadial(U()[sel]);   // 방사형은 영역 크기에 맞춰 호를 다시 계산해야 한다
+// ---- 탭: 주소의 #이름으로 동작(뒤로 가기·링크 공유 가능). 하위 항목(#file, #sigrun …)은 그 탭을 연 뒤 해당 위치로 스크롤.
+const TABS = ['upload', 'signal', 'dash', 'model'], OLD = { file: 'upload', dist: 'dash' };   // 예전 주소(#file, #dist)도 받는다
+const tabItems = [...document.querySelectorAll('#tree > li[data-v]')];
+let tab = null;
+function go(id) {
+  const target = id && !TABS.includes(id) && !OLD[id] ? document.getElementById(id) : null;
+  const v = TABS.includes(id) ? id : OLD[id] || target?.closest('.view')?.id || 'upload';
+  const i = TABS.indexOf(v);
+  tabItems.forEach((li, k) => { li.classList.toggle('on', k === i); li.classList.toggle('done', k !== i && (k === 0 || (k === 1 && !!run))); });
+  // 선택 박스: 앞의 탭은 모두 접혀 있으므로 top = i × (탭 높이 + 간격), 높이 = 탭 + 펼친 하위 항목
+  const step = tabItems[0].querySelector('.tab').offsetHeight + 10;
+  $('pill').style.transform = `translateY(${i * step}px)`;
+  $('pill').style.height = (tabItems[0].querySelector('.tab').offsetHeight + tabItems[i].querySelector('.sub > ul').scrollHeight) + 'px';
+  document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === v));
+  document.querySelectorAll('.sub a').forEach(a => a.classList.toggle('cur', a.getAttribute('href') === '#' + id));
+  if (v === 'signal') requestAnimationFrame(syncSeg);   // 숨겨져 있던 동안은 버튼 폭을 잴 수 없었다
+  if (v !== tab) {
+    tab = v;
+    requestAnimationFrame(() => document.querySelectorAll('#' + v + ' .plot').forEach(p => { if (window.Plotly && p.data) Plotly.Plots.resize(p); }));
+    if (v === 'dash' && run) drawRadial(U()[sel]);   // 방사형은 영역 크기에 맞춰 호를 다시 계산해야 한다
+  }
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
-window.addEventListener('hashchange', syncNav);
+window.addEventListener('hashchange', () => go(location.hash.slice(1)));
 
 // ---- 상단 분석 조건(결과가 어떤 조건에서 나왔는지 항상 보이게)
 function renderContext() {
@@ -110,7 +306,7 @@ function drawCurve(div, c, text, sig, bg) {
   };
   band(sig, C.moss, '신호', true); band(bg, C.muted, '배경');
   const tl = /^TL/.test(c.record_type);
-  Plotly.react(div, [{ x, y: c.y, customdata: x.map((_, i) => i + 1), mode: 'lines', line: { color: C.ink, width: 1.5 },
+  plot(div, [{ x, y: c.y, customdata: x.map((_, i) => i + 1), mode: 'lines', line: { color: C.ink, width: 1.5 },
     hovertemplate: `채널 %{customdata} · %{x:.2f} ${tl ? '°C' : 's'}<br>%{y} counts<extra></extra>` }],
   { ...BASE, title: title(text), xaxis: ax({ title: tl ? '온도 (°C)' : '자극 시간 (s)' }), yaxis: ax({ title: '계수 (counts)' }), shapes, annotations, showlegend: false }, PC);
 }
@@ -151,7 +347,11 @@ Object.entries(MODE_LABEL).forEach(([m, label]) => {
   b.onclick = () => { formMode = m; syncSeg(); };
   $('modeSeg').append(b);
 });
-const syncSeg = () => document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === formMode));
+function syncSeg() {
+  document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === formMode));
+  const b = document.querySelector('#modeSeg button.on'), t = document.querySelector('#modeSeg .thumb');
+  if (b && b.offsetWidth) { t.style.width = b.offsetWidth + 'px'; t.style.transform = `translateX(${b.offsetLeft - 3}px)`; }
+}
 $('runHint').textContent = `채널 1–${NCH}, 형식 시작:끝(예: 6:10). 입력하면 위 곡선에 색 띠로 표시됨. `
   + 'A는 알갱이마다 De 하나, B는 디스크의 알갱이 신호를 합산해 디스크마다 De 하나.' + (SG ? '' : ' 이 파일은 B만 가능.');
 
@@ -174,7 +374,7 @@ $('runForm').onsubmit = async e => {
     run = { mode, sig, bg, sar: s.result, age, meta: s.meta, secs: ((Date.now() - t0) / 1000).toFixed(1) };
     $('runStatus').textContent = `완료 · ${s.result.n_success}/${s.result.n_requested} 분석, QC 통과 ${acc.length} · ${run.secs}초`;
     renderRun();
-    location.hash = '#dist';
+    location.hash = '#dash';
   } catch (err) {
     $('runStatus').textContent = 'SAR 실패: ' + err.message;
   } finally { clearInterval(tick); $('runBtn').disabled = false; }
@@ -247,7 +447,7 @@ async function drawDR(u, token) {
     shapes.push({ type: 'line', x0: 0, x1: d.de, y0: nat.lxtx, y1: nat.lxtx, line: { color: C.natural, dash: 'dot', width: 1 } },
                 { type: 'line', x0: d.de, x1: d.de, y0: 0, y1: nat.lxtx, line: { color: C.natural, dash: 'dot', width: 1 } });
   }
-  Plotly.react('dDR', traces, { ...BASE, shapes, title: title('선량-반응 곡선' + (d.de == null ? ' · De 계산 불가' : '')),
+  plot('dDR', traces, { ...BASE, shapes, title: title('선량-반응 곡선' + (d.de == null ? ' · De 계산 불가' : '')),
     xaxis: ax({ title: '재생 선량 (s)', rangemode: 'tozero' }), yaxis: ax({ title: 'Lx/Tx', rangemode: 'tozero' }) }, PC);
 }
 
@@ -264,7 +464,7 @@ function drawHist(u) {
     marker: { color, line: { color: '#fff', width: 1 } }, customdata: edges.map(e => `${e.toFixed(0)}–${(e + size).toFixed(0)}`),
     hovertemplate: '%{customdata} s: %{y}개<extra>' + name + '</extra>' });
   const shapes = u.de == null ? [] : [{ type: 'line', x0: u.de, x1: u.de, y0: 0, y1: 1, yref: 'paper', line: { color: C.ink, width: 1.5, dash: 'dash' } }];
-  Plotly.react('dHist', [bar(no, `탈락 (${no.length})` + (noDe ? ` · De 계산 불가 ${noDe}개 제외` : ''), C.fail), bar(ok, `통과 (${ok.length})`, C.pass)],
+  plot('dHist', [bar(no, `탈락 (${no.length})` + (noDe ? ` · De 계산 불가 ${noDe}개 제외` : ''), C.fail), bar(ok, `통과 (${ok.length})`, C.pass)],
     { ...BASE, barmode: 'stack', shapes, title: title('De 분포 · 점선 = 선택한 단위'), xaxis: ax({ title: 'De (s)' }), yaxis: ax({ title: '개수' }) }, PC);
 }
 
@@ -286,7 +486,7 @@ function drawRadial(u) {
   const pts = { x: P.map(p => p.radial_x), y: P.map(p => p.radial_y), mode: 'markers', name: '통과한 De', marker: { color: C.pass, size: 9 },
     text: P.map(p => `De ${fmt(p.de)} ± ${fmt(p.de_error)} s`), hovertemplate: '%{text}<extra></extra>' };
   let Y = Math.max(3, ...P.map(p => Math.abs(p.radial_y))) * 1.15;
-  Plotly.react(gd, [pts], layout(Y), PC);
+  plot(gd, [pts], layout(Y));
   const W = gd._fullLayout._size.w, H = gd._fullLayout._size.h, r = W * 0.78;
   const arcPt = (s, rad, Yv) => { const m = s * (H / (2 * Yv)) / (W / X), px = rad / Math.sqrt(1 + m * m); return [px * X / W, m * px * 2 * Yv / H]; };
   const sOf = v => Math.log(v) - z0, sMax = Math.max(...ticks.map(v => Math.abs(sOf(v))));
@@ -306,7 +506,7 @@ function drawRadial(u) {
     pts];
   if (selPt >= 0) traces.push({ x: [P[selPt].radial_x], y: [P[selPt].radial_y], mode: 'markers', name: '선택', hoverinfo: 'skip',
     marker: { size: 18, color: 'rgba(0,0,0,0)', line: { color: C.ink, width: 1.5 } } });
-  Plotly.react(gd, traces, layout(Y), PC);
+  plot(gd, traces, layout(Y));
 }
 
 // 디스크 지도. A: 선택한 디스크의 10×10 구멍(번호는 왼쪽 위부터 가로 순서로 가정). B: 디스크 전체.
@@ -369,7 +569,7 @@ $('onlyPass').onchange = renderTable;
 $('prevBtn').onclick = () => select(sel - 1);
 $('nextBtn').onclick = () => select(sel + 1);
 document.addEventListener('keydown', e => {
-  if (!run || location.hash !== '#dist' || /INPUT|SELECT/.test(document.activeElement.tagName)) return;
+  if (!run || tab !== 'dash' || /INPUT|SELECT/.test(document.activeElement.tagName)) return;
   if (e.key === 'ArrowLeft') select(sel - 1); else if (e.key === 'ArrowRight') select(sel + 1);
 });
 
@@ -396,7 +596,7 @@ function renderModel() {
 if (!window.Plotly) document.querySelectorAll('.plot').forEach(p => p.replaceChildren(el('div', '그래프 라이브러리를 불러오지 못함. 표와 텍스트는 표시됨.', 'empty')));
 renderContext();
 renderFile();
-syncSeg();
 fillGrains();
-syncNav();
-let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (run && location.hash === '#dist') drawRadial(U()[sel]); }, 150); });
+go(location.hash.slice(1));
+document.fonts.ready.then(() => { syncSeg(); go(location.hash.slice(1)); });   // 글꼴이 바뀌면 탭·버튼 폭이 달라지므로 다시 맞춘다
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { syncSeg(); if (run && tab === 'dash') drawRadial(U()[sel]); }, 150); });

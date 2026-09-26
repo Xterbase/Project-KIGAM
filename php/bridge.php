@@ -39,6 +39,29 @@ function read_json(string $path): ?array
     return is_file($path) ? json_decode((string) file_get_contents($path), true) : null;
 }
 
+// 샘플 목록(최신순). 폴더 이름이 시각으로 시작하므로 이름 역순 = 최신순. index.php와 dashboard.php가 함께 쓴다.
+function list_samples(): array
+{
+    $samples = [];
+    foreach (array_reverse(glob(SAMPLES . '/*', GLOB_ONLYDIR) ?: []) as $d) {
+        $id = basename($d);
+        $meta = read_json($d . '/meta.json');
+        if (sample_dir($id) !== null && $meta !== null) {
+            $samples[] = ['id' => $id] + $meta;
+        }
+    }
+    return $samples;
+}
+
+// 목록 표의 측정 방식 칸
+function sample_mode(array $s): string
+{
+    if (($s['ok'] ?? true) === false) {
+        return '<span class="no">읽기 실패</span>';
+    }
+    return isset($s['single_grain']) ? ($s['single_grain'] ? 'single-grain' : 'single-aliquot') : '—';
+}
+
 // run.R 호출. 사용자 입력은 JSON 파일로만 넘기고, 셸 인자는 서버가 만든 경로뿐이다.
 // 요청마다 파일 이름이 달라서 동시에 들어온 요청이 서로의 입출력을 덮어쓰지 않는다.
 // $keep_as를 주면 출력을 그 이름으로 샘플 폴더에 남긴다(결과 기록). 아니면 지운다(표시용).
