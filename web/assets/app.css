@@ -236,6 +236,7 @@ li.on .sub li:nth-child(4) a { transition-delay: .15s; }
 
 /* 그래프 상자 */
 .plotbox { position: relative; background: var(--bone-white); border-radius: 16px; box-shadow: inset 0 0 0 1px var(--mist); padding: 10px 12px 4px; min-width: 0; }
+.plotbox.crowded { padding-top: 46px; }   /* 제목이 도구 버튼과 겹치는 좁은 칸: 제목을 버튼 줄 아래로 */
 .plot { width: 100%; height: 380px; }
 .plot.tall { height: 420px; }
 .plot .empty { display: flex; height: 100%; align-items: center; justify-content: center; color: var(--slate-smoke); font-size: 12px; }

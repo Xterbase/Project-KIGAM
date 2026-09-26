@@ -83,9 +83,9 @@ function plot(div, data, layout) {
   if (!gd._events) {
     gd._events = true;
     gd.on('plotly_relayout', () => syncAxes(gd));
-    gd.on('plotly_afterplot', () => syncAxes(gd));   // 크기 변경 뒤에도 눈금·축 이름 위치를 다시 잰다
+    gd.on('plotly_afterplot', () => { fitTitle(gd); syncAxes(gd); });   // 크기 변경 뒤에도 눈금·축 이름 위치를 다시 잰다
   }
-  syncAxes(gd);
+  fitTitle(gd); syncAxes(gd);
   return p;
 }
 const rangeOf = (gd, a) => [...gd._fullLayout[a + 'axis'].range];
@@ -106,6 +106,13 @@ function addTools(gd) {
     gd._track[a] = { t, th, tip };
     dragThumb(gd, a);
   }
+}
+// 제목이 오른쪽 위 도구 버튼과 가로로 겹치면(좁은 칸) 상자 위쪽을 넓혀 제목을 버튼 줄 아래로 내린다.
+// 가로 위치만 비교하므로 위쪽 여백을 바꿔도 판정이 뒤집히지 않는다.
+function fitTitle(gd) {
+  const ttl = gd.querySelector('.gtitle'), tools = gd.parentElement.querySelector('.ptools');
+  if (!ttl || !tools) return;
+  gd.parentElement.classList.toggle('crowded', ttl.getBoundingClientRect().right > tools.getBoundingClientRect().left - 6);
 }
 function hideAxes(gd) { if (gd._track) Object.values(gd._track).forEach(({ t, tip }) => { t.classList.remove('show'); tip.classList.remove('show'); }); }
 
@@ -301,7 +308,7 @@ function drawCurve(div, c, text, sig, bg) {
     if (!r || r[0] < 1 || r[1] > x.length || r[0] > r[1]) return;
     const x0 = x[r[0] - 1] - dx, x1 = x[r[1] - 1] + dx, font = { size: 11, color: C.ink };
     shapes.push({ type: 'rect', xref: 'x', yref: 'paper', x0, x1, y0: 0, y1: 1, fillcolor: color, opacity: 0.3, line: { width: 0 },
-      ...(outside ? {} : { label: { text: name, textposition: 'top center', font } }) });
+      ...(outside ? {} : { label: { text: name, textposition: 'top right', font } }) });   // 띠가 글자보다 좁아도 그래프 밖으로 잘리지 않게 오른쪽 끝에 맞춤
     if (outside) annotations.push({ xref: 'x', yref: 'paper', x: x1, y: 1, xanchor: 'left', yanchor: 'top', xshift: 4, text: name, showarrow: false, font });
   };
   band(sig, C.moss, '신호', true); band(bg, C.muted, '배경');
@@ -599,4 +606,8 @@ renderFile();
 fillGrains();
 go(location.hash.slice(1));
 document.fonts.ready.then(() => { syncSeg(); go(location.hash.slice(1)); });   // 글꼴이 바뀌면 탭·버튼 폭이 달라지므로 다시 맞춘다
-let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { syncSeg(); if (run && tab === 'dash') drawRadial(U()[sel]); }, 150); });
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => {
+  syncSeg();
+  document.querySelectorAll('.plot').forEach(gd => { if (gd.data) Plotly.relayout(gd, legendLayout(gd)); });   // 그래프 높이가 바뀌면 범례 위치도 다시 계산
+  if (run && tab === 'dash') drawRadial(U()[sel]);
+}, 150); });
