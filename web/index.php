@@ -44,6 +44,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'single_grain' => $x['single_grain'] ?? null,
                 'n_positions' => $x['n_positions'] ?? null,
                 'n_grains' => isset($x['grains']) ? count($x['grains']) : null,
+                'n_records' => isset($x['records']) ? count($x['records']) : null,
+                'record_types' => $x['record_types'] ?? null,
+                'header' => $x['header'] ?? null,
             ], JSON_UNESCAPED_UNICODE));
 
             header('Location: dashboard.php?id=' . $id);
@@ -72,32 +75,22 @@ $samples = list_samples();
     <div class="card error"><?= h($error) ?></div>
   <?php endif; ?>
 
-  <form class="card upload" method="post" enctype="multipart/form-data">
-    <input type="file" name="bin" accept=".bin,.BIN,.rda,.rdata,.RData" required>
-    <button type="submit" class="primary">업로드하고 열기</button>
-    <span class="note">업로드 직후 파일 구성을 읽음(수 초 소요)</span>
+  <!-- 끌어다 놓기 영역(assets/drop.js): 파일을 고르는 즉시 올리고 대시보드로 이동 -->
+  <form method="post" enctype="multipart/form-data" id="upForm">
+    <label class="drop" id="drop">
+      <input type="file" name="bin" accept=".bin,.BIN,.rda,.rdata,.RData" hidden>
+      <b>BIN / RDA 파일을 끌어다 놓기</b>
+      <span class="note">또는 눌러서 선택 · 최대 <?= h(ini_get('upload_max_filesize')) ?> · 올리면 파일 구성을 읽고 대시보드로 이동(수 초 소요)</span>
+    </label>
   </form>
 
   <p class="axis" style="margin-top:48px">샘플 목록</p>
   <?php if (!$samples): ?>
     <p class="note">아직 올린 파일 없음.</p>
   <?php else: ?>
-    <div class="tablewrap">
-      <table>
-        <tr><th>업로드 시각</th><th>파일</th><th>측정 방식</th><th>디스크</th><th>알갱이</th><th></th></tr>
-        <?php foreach ($samples as $s): ?>
-          <tr>
-            <td class="num"><?= h(substr((string) ($s['uploaded_at'] ?? ''), 0, 16)) ?></td>
-            <td><?= h($s['original_name'] ?? '') ?></td>
-            <td><?= sample_mode($s) ?></td>
-            <td class="num"><?= h($s['n_positions'] ?? '—') ?></td>
-            <td class="num"><?= !empty($s['single_grain']) ? h($s['n_grains']) : '—' ?></td>
-            <td><a class="bracket" href="dashboard.php?id=<?= h($s['id']) ?>">열기</a></td>
-          </tr>
-        <?php endforeach; ?>
-      </table>
-    </div>
+    <?php sample_table($samples); ?>
   <?php endif; ?>
 </div>
+<script src="assets/drop.js"></script>
 </body>
 </html>

@@ -73,21 +73,7 @@ if ($meta === null || $inspect === null) {
       </form>
 
       <h3 id="uplist">샘플 목록</h3>
-      <div class="tablewrap">
-        <table>
-          <tr><th>업로드 시각</th><th>파일</th><th>측정 방식</th><th>디스크</th><th>알갱이</th><th></th></tr>
-          <?php foreach (list_samples() as $s): ?>
-            <tr<?= $s['id'] === $id ? ' class="sel"' : '' ?>>
-              <td class="num"><?= h(substr((string) ($s['uploaded_at'] ?? ''), 0, 16)) ?></td>
-              <td><?= h($s['original_name'] ?? '') ?></td>
-              <td><?= sample_mode($s) ?></td>
-              <td class="num"><?= h($s['n_positions'] ?? '—') ?></td>
-              <td class="num"><?= !empty($s['single_grain']) ? h($s['n_grains']) : '—' ?></td>
-              <td><?= $s['id'] === $id ? '<span class="note">지금 보는 파일</span>' : '<a class="bracket" href="dashboard.php?id=' . h($s['id']) . '">열기</a>' ?></td>
-            </tr>
-          <?php endforeach; ?>
-        </table>
-      </div>
+      <?php sample_table(list_samples(), $id); ?>
     </section>
 
     <section class="view" id="signal">
@@ -107,8 +93,9 @@ if ($meta === null || $inspect === null) {
         <form id="runForm">
           <div class="row">
             <span class="seg" id="modeSeg"><span class="thumb"></span></span>
-            <label>신호 구간 <input type="text" id="sig" placeholder="예: 6:10" pattern="\s*\d+\s*:\s*\d+\s*" required></label>
-            <label>배경 구간 <input type="text" id="bg" placeholder="예: 81:100" pattern="\s*\d+\s*:\s*\d+\s*" required></label>
+            <!-- 구간 = 시작 채널 : 끝 채널. ':'는 고정이고 숫자 두 칸만 입력한다. -->
+            <label>신호 구간 <span class="range"><input type="number" id="sig1" min="1" placeholder="6" required><i>:</i><input type="number" id="sig2" min="1" placeholder="10" required></span></label>
+            <label>배경 구간 <span class="range"><input type="number" id="bg1" min="1" placeholder="81" required><i>:</i><input type="number" id="bg2" min="1" placeholder="100" required></span></label>
           </div>
           <div class="row" style="margin:0">
             <button type="submit" class="btn primary" id="runBtn">SAR 실행</button>
@@ -174,6 +161,7 @@ if ($meta === null || $inspect === null) {
     JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP
 ) ?></script>
 <script src="assets/vendor/plotly-basic-2.35.2.min.js"></script>
+<script src="assets/drop.js"></script>
 <script src="assets/app.js"></script>
 <?php endif; ?>
 </body>

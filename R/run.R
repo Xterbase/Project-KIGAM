@@ -53,6 +53,15 @@ suppressPackageStartupMessages({
     records <- data.frame(record_index = record_index, meta[, cols, drop = FALSE])
     names(records) <- tolower(names(records))
 
+    # 파일 머리 정보(시료명·측정자·측정일 등): 샘플 목록에 보여 준다. 값이 여럿이면 모두.
+    # BIN의 DATE는 ddmmyy 문자열이다. 읽을 수 없으면 null.
+    distinct <- function(col) {
+      v <- if (col %in% colnames(meta)) trimws(as.character(meta[[col]])) else character(0)
+      .arr(sort(setdiff(unique(v), c("", "None"))))
+    }
+    dates <- if ("DATE" %in% colnames(meta)) as.Date(as.character(meta$DATE), "%d%m%y") else NA
+    date_of <- function(f) if (all(is.na(dates))) NULL else format(f(dates, na.rm = TRUE))
+
     list(
       file = info$file,
       file_type = info$file_type,
@@ -63,6 +72,11 @@ suppressPackageStartupMessages({
       positions = .arr(info$positions),
       grains = data.frame(position = info$grain_position, grain = info$grain),
       record_types = .arr(info$record_types),
+      header = list(
+        sample = distinct("SAMPLE"), comment = distinct("COMMENT"), user = distinct("USER"),
+        sequence = distinct("SEQUENCE"), lightsource = distinct("LIGHTSOURCE"),
+        date_first = date_of(min), date_last = date_of(max)
+      ),
       records = records
     )
   },

@@ -62,6 +62,45 @@ function sample_mode(array $s): string
     return isset($s['single_grain']) ? ($s['single_grain'] ? 'single-grain' : 'single-aliquot') : '—';
 }
 
+// 머리 정보 값 목록 → 표시 문자열. 값이 많으면 앞의 $n개 + "외 N".
+function join_some(?array $v, int $n = 2): string
+{
+    if (!$v) {
+        return '—';
+    }
+    return implode(', ', array_slice($v, 0, $n)) . (count($v) > $n ? ' 외 ' . (count($v) - $n) : '');
+}
+
+// 샘플 목록 표(index.php, dashboard.php). $current는 지금 보는 샘플 id.
+// header(시료명·측정자·측정일 등)는 run.R inspect가 준다. 이 항목이 생기기 전에 올린 샘플은 '—'.
+function sample_table(array $samples, string $current = ''): void
+{
+    ?>
+    <div class="tablewrap">
+      <table class="samples">
+        <tr><th>시료</th><th>측정 방식 · 광원</th><th>구성</th><th>측정자 · 시퀀스</th><th>측정일</th><th>메모</th><th>업로드</th><th></th></tr>
+        <?php foreach ($samples as $s):
+            $hd = $s['header'] ?? [];
+            $d1 = $hd['date_first'] ?? null;
+            $d2 = $hd['date_last'] ?? null; ?>
+          <tr<?= $s['id'] === $current ? ' class="sel"' : '' ?>>
+            <td><b><?= h(join_some($hd['sample'] ?? null)) ?></b>
+              <span class="note"><?= h($s['original_name'] ?? '') ?> · <?= h(number_format(($s['size'] ?? 0) / 1048576, 1)) ?> MB</span></td>
+            <td><?= sample_mode($s) ?><span class="note"><?= h(join_some($hd['lightsource'] ?? null)) ?></span></td>
+            <td class="num"><?= h($s['n_positions'] ?? '—') ?> 디스크<?= !empty($s['single_grain']) ? ' · ' . h($s['n_grains']) . ' 알갱이' : '' ?>
+              <span class="note"><?= h($s['n_records'] ?? '—') ?> 레코드 · <?= h(join_some($s['record_types'] ?? null, 3)) ?></span></td>
+            <td><?= h(join_some($hd['user'] ?? null)) ?><span class="note"><?= h(join_some($hd['sequence'] ?? null)) ?></span></td>
+            <td class="num"><?= h($d1 ?? '—') ?><?php if ($d2 && $d2 !== $d1): ?><span class="note">~ <?= h($d2) ?></span><?php endif; ?></td>
+            <td class="memo" title="<?= h(implode("\n", $hd['comment'] ?? [])) ?>"><?= h(join_some($hd['comment'] ?? null, 1)) ?></td>
+            <td class="num"><?= h(substr((string) ($s['uploaded_at'] ?? ''), 0, 16)) ?></td>
+            <td><?= $s['id'] === $current ? '<span class="note">지금 보는 파일</span>' : '<a class="bracket" href="dashboard.php?id=' . h($s['id']) . '">열기</a>' ?></td>
+          </tr>
+        <?php endforeach; ?>
+      </table>
+    </div>
+    <?php
+}
+
 // run.R 호출. 사용자 입력은 JSON 파일로만 넘기고, 셸 인자는 서버가 만든 경로뿐이다.
 // 요청마다 파일 이름이 달라서 동시에 들어온 요청이 서로의 입출력을 덮어쓰지 않는다.
 // $keep_as를 주면 출력을 그 이름으로 샘플 폴더에 남긴다(결과 기록). 아니면 지운다(표시용).

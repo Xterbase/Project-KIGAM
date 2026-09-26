@@ -24,7 +24,7 @@ const BASE = {
 const title = text => ({ text, font: { size: 14 }, x: 0, xanchor: 'left' });
 
 const SIGMAB = { single_grain: 0.20, single_aliquot: 0.15 };  // 0.20: 문헌 근거, 0.15: 기존 기본값(미확인)
-const MODE_LABEL = { single_grain: 'A · 알갱이별', single_aliquot: 'B · 디스크별' };
+const MODE_LABEL = { single_grain: 'Single grain', single_aliquot: 'Single aliquot' };
 
 const fmt = (v, d = 1) => v == null ? '—' : Number(v).toFixed(d);
 const arr = v => v == null ? [] : [].concat(v);
@@ -230,15 +230,6 @@ document.querySelectorAll('.howto').forEach(h => h.innerHTML =
   `<span>${ICON.zout}${ICON.zin} 가운데 기준 축소·확대</span>` +
   (h.nextElementSibling.classList.contains('dash') ? `<span>${ICON.exp} 크게 보기(나머지는 오른쪽 1열 · Esc로 복귀)</span>` : ''));
 
-// ---- 01 업로드: 다른 파일을 끌어다 놓거나 골라서 올린다(처리는 index.php)
-{
-  const drop = $('drop'), input = drop.querySelector('input'), form = $('upForm');
-  input.onchange = () => { if (input.files.length) { drop.querySelector('b').textContent = input.files[0].name + ' 올리는 중…'; form.submit(); } };
-  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
-  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-  drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); input.files = e.dataTransfer.files; input.onchange(); });
-}
-
 // ---- 파일 구성에서 바로 얻는 것
 const byDisc = {};
 I.grains.forEach(g => (byDisc[g.position] ??= []).push(g.grain));
@@ -342,15 +333,21 @@ async function showSignal() {
   } catch (e) { if (token === sigToken) plotMessage('curvePlot', '곡선을 불러오지 못함: ' + e.message); }
 }
 // 입력 중인 적분 구간을 곡선 위 색 띠로 바로 보여 준다.
-function drawSignal() { if (sigCurve) drawCurve('curvePlot', sigCurve.c, sigCurve.text, parseRange($('sig').value), parseRange($('bg').value)); }
+// 구간 입력은 숫자 두 칸(시작 · 끝). R에는 예전처럼 "시작:끝" 문자열로 넘긴다.
+const rangeVal = id => $(id + '1').value + ':' + $(id + '2').value;
+function drawSignal() { if (sigCurve) drawCurve('curvePlot', sigCurve.c, sigCurve.text, parseRange(rangeVal('sig')), parseRange(rangeVal('bg'))); }
 selPos.onchange = fillGrains; selGrain.onchange = fillRecs; selRec.onchange = showSignal;
-$('sig').oninput = drawSignal; $('bg').oninput = drawSignal;
+['sig1', 'sig2', 'bg1', 'bg2'].forEach((id, k, ids) => {
+  const inp = $(id); inp.max = NCH; inp.oninput = drawSignal;
+  // 습관대로 ':'(또는 스페이스)를 치면 끝 칸으로 넘어감
+  if (k % 2 === 0) inp.onkeydown = e => { if (e.key === ':' || e.key === ' ') { e.preventDefault(); $(ids[k + 1]).focus(); } };
+});
 
 // ---- 02 분석 조건: 측정 방식 + 적분 구간 → SAR → 연령 모델
 let formMode = SG ? 'single_grain' : 'single_aliquot';
 Object.entries(MODE_LABEL).forEach(([m, label]) => {
   const b = el('button', label); b.type = 'button'; b.dataset.mode = m;
-  if (m === 'single_grain' && !SG) { b.disabled = true; b.title = 'GRAIN 번호가 없는 파일이라 알갱이별 분석 불가'; }
+  if (m === 'single_grain' && !SG) { b.disabled = true; b.title = 'GRAIN 번호가 없는 파일이라 Single grain 분석 불가'; }
   b.onclick = () => { formMode = m; syncSeg(); };
   $('modeSeg').append(b);
 });
@@ -359,14 +356,15 @@ function syncSeg() {
   const b = document.querySelector('#modeSeg button.on'), t = document.querySelector('#modeSeg .thumb');
   if (b && b.offsetWidth) { t.style.width = b.offsetWidth + 'px'; t.style.transform = `translateX(${b.offsetLeft - 3}px)`; }
 }
-$('runHint').textContent = `채널 1–${NCH}, 형식 시작:끝(예: 6:10). 입력하면 위 곡선에 색 띠로 표시됨. `
-  + 'A는 알갱이마다 De 하나, B는 디스크의 알갱이 신호를 합산해 디스크마다 De 하나.' + (SG ? '' : ' 이 파일은 B만 가능.');
+$('runHint').textContent = `채널 1–${NCH}. 시작·끝 채널 번호만 입력(예: 6 : 10). 입력하면 위 곡선에 색 띠로 표시됨. `
+  + 'Single grain은 알갱이마다 De 하나, Single aliquot은 디스크의 알갱이 신호를 합산해 디스크마다 De 하나.'
+  + (SG ? '' : ' 이 파일은 Single aliquot만 가능.');
 
 $('runForm').onsubmit = async e => {
   e.preventDefault();
-  const sig = $('sig').value.trim(), bg = $('bg').value.trim(), mode = formMode;
+  const sig = rangeVal('sig'), bg = rangeVal('bg'), mode = formMode;
   const bad = [parseRange(sig), parseRange(bg)].some(r => !r || r[0] < 1 || r[1] > NCH || r[0] > r[1]);
-  if (bad) { $('runStatus').textContent = `구간은 1–${NCH} 안의 시작:끝 형식이어야 함.`; return; }
+  if (bad) { $('runStatus').textContent = `구간은 1–${NCH} 안이고 시작이 끝보다 크지 않아야 함.`; return; }
 
   $('runBtn').disabled = true;
   const t0 = Date.now(), tick = setInterval(() => { $('runStatus').textContent = `SAR 계산 중 · ${Math.round((Date.now() - t0) / 1000)}초`; }, 500);
