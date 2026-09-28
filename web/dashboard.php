@@ -43,7 +43,7 @@ if ($meta === null || $inspect === null) {
     <ul class="tree" id="tree">
       <li class="pill" id="pill" aria-hidden="true"></li>
       <li data-v="upload"><a class="tab" href="#upload"><span class="dot"></span>업로드<span class="num">01</span></a>
-        <div class="sub"><ul><li><a href="#file">파일 구성</a></li><li><a href="#uplist">최근 업로드 목록</a></li></ul></div></li>
+        <div class="sub"><ul><li><a href="#file">파일 구성</a></li><li><a href="#upfile">다른 파일 올리기</a></li><li><a href="#uplist">최근 업로드 목록</a></li></ul></div></li>
       <li data-v="signal"><a class="tab" href="#signal"><span class="dot"></span>신호 분석<span class="num">02</span></a>
         <div class="sub"><ul><li><a href="#sigcurve">곡선 보기</a></li><li><a href="#sigrun">분석 조건 · SAR</a></li></ul></div></li>
       <li data-v="dash"><a class="tab" href="#dash"><span class="dot"></span>대시보드<span class="num">03</span></a>
@@ -63,8 +63,16 @@ if ($meta === null || $inspect === null) {
       <h3>디스크 목록</h3>
       <div class="tablewrap"><table id="discs"></table></div>
 
+      <h3 id="upfile">다른 파일 올리기</h3>
+      <!-- 업로드 처리는 index.php가 한다(저장 → inspect → 새 대시보드로 이동). -->
+      <form method="post" action="./" enctype="multipart/form-data" id="upForm">
+        <label class="drop" id="drop">
+          <input type="file" name="bin" accept=".bin,.BIN,.rda,.rdata,.RData" hidden>
+          <b>BIN / RDA 파일을 끌어다 놓기</b><span class="note">또는 눌러서 선택 · 올리면 파일 구성을 읽고 새 대시보드로 이동(수 초 소요)</span>
+        </label>
+      </form>
+
       <h3 id="uplist">최근 업로드 목록</h3>
-      <!-- 다른 파일 업로드는 index.php에서만 한다. 여기서는 이전에 올린 파일을 다시 여는 목록만 보여준다. -->
       <?php sample_table(list_samples(), $id); ?>
     </section>
 
@@ -153,6 +161,7 @@ if ($meta === null || $inspect === null) {
     JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP
 ) ?></script>
 <script src="assets/vendor/plotly-basic-2.35.2.min.js"></script>
+<script src="assets/drop.js"></script>
 <script src="assets/app.js"></script>
 <?php endif; ?>
 </body>
