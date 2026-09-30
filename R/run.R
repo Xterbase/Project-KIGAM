@@ -17,7 +17,9 @@
 #   curve          path, position, record_index, grain?, mode?
 #   sar            path, positions, signal_integral, background_integral, mode?, seed?, progress_file?
 #   dose_response  path, position, signal_integral, background_integral, grain?, mode?, seed?
-#   age_model      de, de_error, sigmab, model?, max_k?
+#   age_model      de, de_error, sigmab, model?, max_k?, selection?
+#                  selection = 단위별 판정 [{position, grain, auto, final}] — 계산에는 쓰지 않고
+#                  결과에 그대로 남긴다(어느 단위를 사람이 뒤집었는지 기록).
 #
 # 사용자 입력은 PHP가 셸 문자열에 끼워 넣지 말고 이 JSON 파일로만 넘긴다.
 
@@ -167,7 +169,8 @@ suppressPackageStartupMessages({
       fmm_error = r$fmm_error,
       recommendation = rec,
       model_source = r$model_source,
-      result = res
+      result = res,
+      selection = a$selection
     )
   }
 )

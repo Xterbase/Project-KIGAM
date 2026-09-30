@@ -44,11 +44,9 @@ if ($meta === null || $inspect === null) {
       <li class="pill" id="pill" aria-hidden="true"></li>
       <li data-v="upload"><a class="tab" href="#upload"><span class="dot"></span>업로드<span class="num">01</span></a>
         <div class="sub"><ul><li><a href="#file">파일 선택</a></li><li><a href="#uplist">최근 업로드 목록</a></li></ul></div></li>
-      <li data-v="signal"><a class="tab" href="#signal"><span class="dot"></span>신호 분석<span class="num">02</span></a>
-        <div class="sub"><ul><li><a href="#sigcurve">곡선 보기</a></li><li><a href="#sigrun">분석 조건 · SAR</a></li></ul></div></li>
-      <li data-v="dash"><a class="tab" href="#dash"><span class="dot"></span>대시보드<span class="num">03</span></a>
-        <div class="sub"><ul><li><a href="#dplots">그래프 4종</a></li><li><a href="#dmap">디스크 지도</a></li><li><a href="#dtable">단위별 결과</a></li><li><a href="#dqc">선택 단위 QC</a></li></ul></div></li>
-      <li data-v="model"><a class="tab" href="#model"><span class="dot"></span>연령 모델<span class="num">04</span></a>
+      <li data-v="calc"><a class="tab" href="#calc"><span class="dot"></span>De 계산 및 분포<span class="num">02</span></a>
+        <div class="sub"><ul><li><a href="#sigcurve">곡선 보기</a></li><li><a href="#sigrun">분석 조건</a></li><li><a href="#dplots">그래프 4종</a></li><li><a href="#dmap">디스크 지도</a></li><li><a href="#dtable">단위별 결과</a></li><li><a href="#dqc">선택 단위 QC</a></li></ul></div></li>
+      <li data-v="model"><a class="tab" href="#model"><span class="dot"></span>연령 모델<span class="num">03</span></a>
         <div class="sub"><ul><li><a href="#modelBox">추천 · 대표 선량</a></li></ul></div></li>
     </ul>
   </nav>
@@ -76,8 +74,9 @@ if ($meta === null || $inspect === null) {
       <?php sample_table(list_samples(), $id); ?>
     </section>
 
-    <section class="view" id="signal">
-      <p class="axis">02 · 신호 분석</p>
+    <!-- De 계산 전에는 곡선과 분석 조건만 보이고, 계산하면 그 아래에 분포 결과(distBody)가 나타난다. -->
+    <section class="view" id="calc">
+      <p class="axis">02 · De 계산 및 분포</p>
       <h2>신호 곡선과 분석 조건</h2>
       <div class="row" id="sigcurve">
         <label>디스크 <select id="selPos"></select></label>
@@ -92,31 +91,30 @@ if ($meta === null || $inspect === null) {
       <div class="card">
         <form id="runForm">
           <div class="row">
-            <span class="seg" id="modeSeg"><span class="thumb"></span></span>
+            <label>측정 방식 <b id="modeVal"></b></label>
             <!-- 구간 = 시작 채널 : 끝 채널. ':'는 고정이고 숫자 두 칸만 입력한다. -->
             <label>신호 구간 <span class="range"><input type="number" id="sig1" min="1" placeholder="6" required><i>:</i><input type="number" id="sig2" min="1" placeholder="10" required></span></label>
             <label>배경 구간 <span class="range"><input type="number" id="bg1" min="1" placeholder="81" required><i>:</i><input type="number" id="bg2" min="1" placeholder="100" required></span></label>
           </div>
           <div class="row" style="margin:0">
-            <button type="submit" class="btn primary" id="runBtn">SAR 실행</button>
+            <button type="submit" class="btn primary" id="runBtn">De 계산</button>
             <span class="note" id="runStatus"></span>
           </div>
         </form>
         <p class="note" id="runHint" style="margin:10px 0 0"></p>
       </div>
-    </section>
 
-    <section class="view" id="dash">
-      <p class="axis">03 · 대시보드</p>
-      <h2>De 분포 대시보드</h2>
-      <p class="note" id="distEmpty">SAR 실행 대기. 02 · 신호 분석에서 적분 구간을 정하고 실행하면 표시됨.</p>
       <div id="distBody" hidden>
+        <h2 id="dresult">De 분포</h2>
+        <p class="note no" id="staleNote" hidden></p>
         <div class="selbar">
           <button class="btn" id="prevBtn" title="이전 (←)">이전</button>
           <span class="big" id="selTitle"></span>
           <span id="selDetail"></span>
           <button class="btn" id="nextBtn" title="다음 (→)">다음</button>
-          <span class="note">표·지도를 누르거나 ← → 키로 이동</span>
+          <button class="btn" id="accBtn" title="Accept (A) · 누르면 다음 단위로">Accept</button>
+          <button class="btn" id="rejBtn" title="Reject (R) · 누르면 다음 단위로">Reject</button>
+          <span class="note">표·지도를 누르거나 ← → 키로 이동 · A / R 키로 Accept / Reject(누르면 다음으로)</span>
         </div>
         <div class="howto"></div>
         <div class="dash" id="dplots">
@@ -125,18 +123,18 @@ if ($meta === null || $inspect === null) {
           <div class="plotbox"><div id="dHist" class="plot"></div></div>
           <div class="plotbox"><div id="dRadial" class="plot"></div></div>
         </div>
-        <p class="note">방사형 그래프: QC 통과 De만 표시. De는 원점(왼쪽 0)에서 점을 지나는 직선을 오른쪽 호까지 연장해 읽음. 회색 띠(±2) 안이면 자기 오차 범위에서 중심값과 같음.</p>
+        <p class="note">방사형 그래프: Accept한 De만 표시. De는 원점(왼쪽 0)에서 점을 지나는 직선을 오른쪽 호까지 연장해 읽음. 회색 띠(±2) 안이면 자기 오차 범위에서 중심값과 같음.</p>
         <div class="lower">
           <div id="dmap">
             <div class="row"><b id="mapTitle"></b> <select id="mapDisc"></select></div>
             <div class="map" id="map"></div>
-            <div class="legend"><span><i style="background:var(--pass)"></i>통과</span><span><i style="background:var(--fail)"></i>탈락</span>
+            <div class="legend"><span><i style="background:var(--pass)"></i>Accept</span><span><i style="background:var(--fail)"></i>Reject</span>
               <span><i style="box-shadow:inset 0 0 0 0.5px var(--slate-smoke)"></i>파일에 없음</span></div>
             <p class="note" id="mapNote"></p>
           </div>
           <div>
             <div class="row" id="dtable"><b>분석 단위별 결과</b>
-              <label class="switch"><input type="checkbox" id="onlyPass"><span class="track"><span class="knob"></span></span>통과만 보기</label>
+              <label class="switch"><input type="checkbox" id="onlyPass"><span class="track"><span class="knob"></span></span>Accept만 보기</label>
               <span class="note" id="tableCount"></span></div>
             <div class="tablewrap"><table id="units"></table></div>
             <p class="note" id="failedNote"></p>
@@ -148,9 +146,9 @@ if ($meta === null || $inspect === null) {
     </section>
 
     <section class="view" id="model">
-      <p class="axis">04 · 연령 모델</p>
+      <p class="axis">03 · 연령 모델</p>
       <h2>연령 모델</h2>
-      <div class="card" id="modelBox"><p class="note">SAR 실행 대기.</p></div>
+      <div class="card" id="modelBox"><p class="note">De 계산 대기.</p></div>
     </section>
   </main>
 </div>

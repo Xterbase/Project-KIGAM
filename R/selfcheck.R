@@ -218,9 +218,11 @@ stopifnot(
   "곡선 데이터" = length(r$result$curve_x) == 100
 )
 
-r <- call_run("age_model", list(de = ca1[[1]], de_error = ca1[[2]], sigmab = 0.15))
+sel <- list(list(position = 1, grain = NA, auto = "reject", final = "accept"))
+r <- call_run("age_model", list(de = ca1[[1]], de_error = ca1[[2]], sigmab = 0.15, selection = sel))
 stopifnot(
   "age_model 성공" = r$ok,
+  "판정 기록이 결과에 남음" = r$result$selection[[1]]$final == "accept" && is.null(r$result$selection[[1]]$grain),
   "FMM 성분 표" = length(r$result$result$components) == 3,
   "FMM dose는 null" = is.null(r$result$result$dose),
   "방사형 좌표" = length(r$result$distribution$points) == 62,

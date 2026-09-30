@@ -6,6 +6,7 @@
 const B = JSON.parse(document.getElementById('boot').textContent);
 const I = B.inspect;
 const SG = I.single_grain;
+const MODE = SG ? 'single_grain' : 'single_aliquot';   // 측정 방식은 파일에서 자동 판별(GRAIN 번호 유무). 화면에서 바꾸지 않는다.
 
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const C = {
@@ -237,11 +238,13 @@ const recsOf = (p, g) => I.records.filter(r => r.position == p && r.grain == g);
 const firstOsl = (p, g) => recsOf(p, g).find(r => r.ltype !== 'TL');   // SAR의 자연 신호(첫 OSL/IRSL 측정)
 const NCH = Math.max(...I.records.filter(r => r.ltype !== 'TL').map(r => r.npoints));
 
-let run = null;   // 마지막 SAR 실행: { mode, sig, bg, sar, age, meta }
+// 마지막 De 계산: { mode, sig, bg, sar, dec, age, meta }. dec[i] = 단위 i의 최종 판정(true = Accept).
+// 처음엔 자동 QC 판정을 그대로 쓰고, Accept/Reject 버튼으로 바꾼다. 다시 계산하면 새 자동 판정으로 초기화.
+let run = null;
 let sel = 0, selToken = 0;
 
 // ---- 탭: 주소의 #이름으로 동작(뒤로 가기·링크 공유 가능). 하위 항목(#file, #sigrun …)은 그 탭을 연 뒤 해당 위치로 스크롤.
-const TABS = ['upload', 'signal', 'dash', 'model'], OLD = { file: 'upload', dist: 'dash' };   // 예전 주소(#file, #dist)도 받는다
+const TABS = ['upload', 'calc', 'model'], OLD = { file: 'upload', dist: 'calc', signal: 'calc', dash: 'calc' };   // 예전 주소도 받는다
 const tabItems = [...document.querySelectorAll('#tree > li[data-v]')];
 let tab = null;
 function go(id) {
@@ -255,11 +258,10 @@ function go(id) {
   $('pill').style.height = (tabItems[0].querySelector('.tab').offsetHeight + tabItems[i].querySelector('.sub > ul').scrollHeight) + 'px';
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === v));
   document.querySelectorAll('.sub a').forEach(a => a.classList.toggle('cur', a.getAttribute('href') === '#' + id));
-  if (v === 'signal') requestAnimationFrame(syncSeg);   // 숨겨져 있던 동안은 버튼 폭을 잴 수 없었다
   if (v !== tab) {
     tab = v;
     requestAnimationFrame(() => document.querySelectorAll('#' + v + ' .plot').forEach(p => { if (window.Plotly && p.data) Plotly.Plots.resize(p); }));
-    if (v === 'dash' && run) drawRadial(U()[sel]);   // 방사형은 영역 크기에 맞춰 호를 다시 계산해야 한다
+    if (v === 'calc' && run) drawRadial(U()[sel]);   // 방사형은 영역 크기에 맞춰 호를 다시 계산해야 한다
   }
   if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -268,7 +270,7 @@ window.addEventListener('hashchange', () => go(location.hash.slice(1)));
 // ---- 상단 분석 조건(결과가 어떤 조건에서 나왔는지 항상 보이게)
 function renderContext() {
   const m = run ? run.meta : B.meta, box = $('context'); box.replaceChildren();
-  [['시료 파일', B.file], ['측정 방식', run ? MODE_LABEL[run.mode] : '분석 전'],
+  [['시료 파일', B.file], ['측정 방식', MODE_LABEL[MODE]],
    ['신호 구간', run ? run.sig + '번 채널' : '—'], ['배경 구간', run ? run.bg + '번 채널' : '—'],
    ['sigmab', run ? SIGMAB[run.mode] : '—'], ['분석 소요', run ? run.secs + '초' : '—'], ['단위', '초(s) · 선량률 미입력'],
    ['분석 패키지', `Luminescence ${m.luminescence_version} · R ${m.r_version}`]]
@@ -336,69 +338,86 @@ async function showSignal() {
 // 구간 입력은 숫자 두 칸(시작 · 끝). R에는 예전처럼 "시작:끝" 문자열로 넘긴다.
 const rangeVal = id => $(id + '1').value + ':' + $(id + '2').value;
 function drawSignal() { if (sigCurve) drawCurve('curvePlot', sigCurve.c, sigCurve.text, parseRange(rangeVal('sig')), parseRange(rangeVal('bg'))); }
+// 결과가 보이는 채로 구간을 바꾸면, 아래 결과는 이전 구간 기준임을 알린다.
+function markStale() {
+  const stale = !!run && (rangeVal('sig') !== run.sig || rangeVal('bg') !== run.bg);
+  $('staleNote').hidden = !stale;
+  if (stale) $('staleNote').textContent = `적분 구간이 바뀜 · 아래 결과는 이전 구간(신호 ${run.sig}, 배경 ${run.bg}) 기준 · De 계산을 다시 누르면 갱신`;
+}
 selPos.onchange = fillGrains; selGrain.onchange = fillRecs; selRec.onchange = showSignal;
 ['sig1', 'sig2', 'bg1', 'bg2'].forEach((id, k, ids) => {
-  const inp = $(id); inp.max = NCH; inp.oninput = drawSignal;
+  const inp = $(id); inp.max = NCH; inp.oninput = () => { drawSignal(); markStale(); };
   // 습관대로 ':'(또는 스페이스)를 치면 끝 칸으로 넘어감
   if (k % 2 === 0) inp.onkeydown = e => { if (e.key === ':' || e.key === ' ') { e.preventDefault(); $(ids[k + 1]).focus(); } };
 });
 
-// ---- 02 분석 조건: 측정 방식 + 적분 구간 → SAR → 연령 모델
-let formMode = SG ? 'single_grain' : 'single_aliquot';
-Object.entries(MODE_LABEL).forEach(([m, label]) => {
-  const b = el('button', label); b.type = 'button'; b.dataset.mode = m;
-  if (m === 'single_grain' && !SG) { b.disabled = true; b.title = 'GRAIN 번호가 없는 파일이라 Single grain 분석 불가'; }
-  b.onclick = () => { formMode = m; syncSeg(); };
-  $('modeSeg').append(b);
-});
-function syncSeg() {
-  document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === formMode));
-  const b = document.querySelector('#modeSeg button.on'), t = document.querySelector('#modeSeg .thumb');
-  if (b && b.offsetWidth) { t.style.width = b.offsetWidth + 'px'; t.style.transform = `translateX(${b.offsetLeft - 3}px)`; }
-}
+// ---- 02 분석 조건: 적분 구간 → SAR(De 계산) → 연령 모델
+$('modeVal').textContent = MODE_LABEL[MODE] + ' · 파일에서 자동 판별';
 $('runHint').textContent = `채널 1–${NCH}. 시작·끝 채널 번호만 입력(예: 6 : 10). 입력하면 위 곡선에 색 띠로 표시됨. `
-  + 'Single grain은 알갱이마다 De 하나, Single aliquot은 디스크의 알갱이 신호를 합산해 디스크마다 De 하나.'
-  + (SG ? '' : ' 이 파일은 Single aliquot만 가능.');
+  + (SG ? '알갱이마다 De 하나.' : '디스크마다 De 하나.');
+
+// 연령 모델: 최종 판정이 Accept인 De만 쓴다. 단위별 자동·최종 판정도 함께 보내 결과 파일(age_model.json)에 남긴다.
+async function ageModel() {
+  const units = U(), acc = units.filter((_, i) => run.dec[i]);
+  const selection = units.map((u, i) => ({ position: u.position, grain: u.grain ?? null,
+    auto: AUTO(u) ? 'accept' : 'reject', final: run.dec[i] ? 'accept' : 'reject' }));
+  try {
+    return { ok: true, ...(await api('age_model', { de: acc.map(u => u.de), de_error: acc.map(u => u.de_error), sigmab: SIGMAB[run.mode], selection })).result };
+  } catch (err) { return { ok: false, error: err.message }; }
+}
+// 판정을 바꿀 때마다 부르면 연달아 누를 때 R이 여러 번 뜨므로, 마지막 변경 뒤 0.6초에 한 번만 다시 계산한다.
+let ageTimer = 0, ageToken = 0;
+function refreshAge() {
+  clearTimeout(ageTimer);
+  const token = ++ageToken;
+  ageTimer = setTimeout(async () => {
+    const age = await ageModel();
+    if (token !== ageToken) return;
+    run.age = age; renderModel(); drawRadial(U()[sel]);
+  }, 600);
+}
 
 $('runForm').onsubmit = async e => {
   e.preventDefault();
-  const sig = rangeVal('sig'), bg = rangeVal('bg'), mode = formMode;
+  const sig = rangeVal('sig'), bg = rangeVal('bg'), mode = MODE;
   const bad = [parseRange(sig), parseRange(bg)].some(r => !r || r[0] < 1 || r[1] > NCH || r[0] > r[1]);
   if (bad) { $('runStatus').textContent = `구간은 1–${NCH} 안이고 시작이 끝보다 크지 않아야 함.`; return; }
 
   $('runBtn').disabled = true;
-  const t0 = Date.now(), tick = setInterval(() => { $('runStatus').textContent = `SAR 계산 중 · ${Math.round((Date.now() - t0) / 1000)}초`; }, 500);
+  clearTimeout(ageTimer); ageToken++;   // 이전 결과의 판정 변경으로 대기 중인 모델 계산은 버린다
+  const t0 = Date.now(), tick = setInterval(() => { $('runStatus').textContent = `De 계산 중 · ${Math.round((Date.now() - t0) / 1000)}초`; }, 500);
   try {
     const s = await api('sar', { positions: arr(I.positions), signal_integral: sig, background_integral: bg, mode });
-    const acc = s.result.units.filter(u => u.rc_status === 'OK' && u.de != null);
-    let age;
-    try {
-      age = { ok: true, ...(await api('age_model', { de: acc.map(u => u.de), de_error: acc.map(u => u.de_error), sigmab: SIGMAB[mode] })).result };
-    } catch (err) { age = { ok: false, error: err.message }; }
+    const dec = s.result.units.map(AUTO);
+    run = { mode, sig, bg, sar: s.result, dec, age: null, meta: s.meta };
+    run.age = await ageModel();
     // 소요 시간: 버튼을 누른 때부터 SAR + 연령 모델 응답까지(서버의 R 기동 시간 포함, 사용자가 기다린 시간)
-    run = { mode, sig, bg, sar: s.result, age, meta: s.meta, secs: ((Date.now() - t0) / 1000).toFixed(1) };
-    $('runStatus').textContent = `완료 · ${s.result.n_success}/${s.result.n_requested} 분석, QC 통과 ${acc.length} · ${run.secs}초`;
+    run.secs = ((Date.now() - t0) / 1000).toFixed(1);
+    $('runStatus').textContent = `완료 · ${s.result.n_success}/${s.result.n_requested} 분석, QC 통과 ${dec.filter(Boolean).length} · ${run.secs}초`;
     renderRun();
-    location.hash = '#dash';
+    $('dresult').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err) {
-    $('runStatus').textContent = 'SAR 실패: ' + err.message;
+    $('runStatus').textContent = 'De 계산 실패: ' + err.message;
   } finally { clearInterval(tick); $('runBtn').disabled = false; }
 };
 
-// ---- 03 De 분포: 단위 하나를 고르면 네 그래프·지도·표가 함께 바뀐다
+// ---- De 분포: 단위 하나를 고르면 네 그래프·지도·표가 함께 바뀐다
 const U = () => run.sar.units;
 const unitLabel = u => run.mode === 'single_grain' ? `디스크 ${u.position} · 알갱이 ${u.grain}` : `디스크 ${u.position}`;
+const DEC = ok => ok ? ['● Accept', 'ok'] : ['✕ Reject', 'no'];
+const AUTO = u => u.rc_status === 'OK' && u.de != null;   // 자동 판정: QC 통과이고 De가 있음
 
 function renderRun() {
-  renderContext();
-  $('distEmpty').hidden = true; $('distBody').hidden = false;
+  renderContext(); markStale();
+  $('distBody').hidden = false;
+  go(tab);   // 탭 목록의 완료 표시 갱신
   const md = $('mapDisc'); md.replaceChildren();
   if (run.mode === 'single_grain') [...new Set(U().map(u => u.position))].forEach(p => md.append(new Option('디스크 ' + p, p)));
   md.hidden = run.mode !== 'single_grain';
   const f = arr(run.sar.failed);
   $('failedNote').textContent = f.length ? `분석 실패 ${f.length}개(표에 없음): ` + f.map(x => (run.mode === 'single_grain' ? `디스크 ${x.position} 알갱이 ${x.grain}` : `디스크 ${x.position}`) + ` — ${x.reason}`).join(' / ') : '';
   renderModel();
-  const first = U().findIndex(u => u.rc_status === 'OK');
+  const first = run.dec.indexOf(true);
   sel = first >= 0 ? first : 0;
   renderTable();
   select(sel);
@@ -407,12 +426,16 @@ function renderRun() {
 function select(i) {
   const units = U(); if (!units.length) return;
   sel = Math.max(0, Math.min(units.length - 1, i));
-  const u = units[sel], pass = u.rc_status === 'OK', token = ++selToken;
+  const u = units[sel], pass = AUTO(u), ok = run.dec[sel], token = ++selToken;
   $('selTitle').textContent = unitLabel(u);
-  $('selDetail').replaceChildren(el('span', `De ${fmt(u.de)} ± ${fmt(u.de_error)} s · `), el('span', pass ? '● 통과' : '✕ 탈락', pass ? 'ok' : 'no'),
-    el('span', ` · Recycling ${fmt(u.recycling_ratio, 3)}` + (u.warning ? ' · 경고 있음' : '')));
+  $('selDetail').replaceChildren(el('span', `De ${fmt(u.de)} ± ${fmt(u.de_error)} s · `), el('span', ...DEC(ok)),
+    el('span', (ok === pass ? ' · 자동 판정 그대로' : ` · 수동 변경(자동 판정 ${pass ? 'Accept' : 'Reject'})`)
+      + ` · Recycling ${fmt(u.recycling_ratio, 3)}` + (u.warning ? ' · 경고 있음' : '')));
   $('prevBtn').disabled = sel === 0;
   $('nextBtn').disabled = sel === units.length - 1;
+  $('accBtn').classList.toggle('primary', ok); $('rejBtn').classList.toggle('primary', !ok);
+  $('accBtn').disabled = u.de == null;
+  $('accBtn').title = u.de == null ? 'De가 계산되지 않아 Accept 불가' : 'Accept (A) · 누르면 다음 단위로';
   document.querySelectorAll('#units tr.pick').forEach(r => r.classList.toggle('sel', +r.dataset.i === sel));
   renderMap(); renderQC(u); drawHist(u); drawRadial(u);
   drawUnitCurve(u, token); drawDR(u, token);
@@ -463,13 +486,13 @@ function drawHist(u) {
   const lo = Math.min(...all), hi = Math.max(...all);
   const NB = 15, size = (hi - lo) / NB || 1, edges = [...Array(NB)].map((_, k) => lo + k * size);
   const count = a => { const c = Array(NB).fill(0); a.forEach(x => c[Math.min(NB - 1, Math.floor((x.de - lo) / size))]++); return c; };
-  const ok = units.filter(x => x.de != null && x.rc_status === 'OK'), no = units.filter(x => x.de != null && x.rc_status !== 'OK');
+  const ok = units.filter((x, i) => x.de != null && run.dec[i]), no = units.filter((x, i) => x.de != null && !run.dec[i]);
   const noDe = units.length - all.length;
   const bar = (a, name, color) => ({ type: 'bar', name, x: edges.map(e => e + size / 2), y: count(a), width: size,
     marker: { color, line: { color: '#fff', width: 1 } }, customdata: edges.map(e => `${e.toFixed(0)}–${(e + size).toFixed(0)}`),
     hovertemplate: '%{customdata} s: %{y}개<extra>' + name + '</extra>' });
   const shapes = u.de == null ? [] : [{ type: 'line', x0: u.de, x1: u.de, y0: 0, y1: 1, yref: 'paper', line: { color: C.ink, width: 1.5, dash: 'dash' } }];
-  plot('dHist', [bar(no, `탈락 (${no.length})` + (noDe ? ` · De 계산 불가 ${noDe}개 제외` : ''), C.fail), bar(ok, `통과 (${ok.length})`, C.pass)],
+  plot('dHist', [bar(no, `Reject (${no.length})` + (noDe ? ` · De 계산 불가 ${noDe}개 제외` : ''), C.fail), bar(ok, `Accept (${ok.length})`, C.pass)],
     { ...BASE, barmode: 'stack', shapes, title: title('De 분포 · 점선 = 선택한 단위'), xaxis: ax({ title: 'De (s)' }), yaxis: ax({ title: '개수' }) }, PC);
 }
 
@@ -484,11 +507,11 @@ function drawRadial(u) {
   const lo = Math.min(...des), hi = Math.max(...des);
   const raw = (hi - lo) / 4 || lo / 4, mag = 10 ** Math.floor(Math.log10(raw)), step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(m => m >= raw);
   const ticks = []; for (let v = Math.max(step, Math.floor(lo / step) * step); v <= Math.ceil(hi / step) * step + 1e-9; v += step) ticks.push(v);
-  const selPt = u.rc_status === 'OK' ? P.findIndex(p => Math.abs(p.de - u.de) < 1e-6) : -1;
-  const note = selPt < 0 ? ' · 선택한 단위는 탈락이라 없음' : '';
+  const selPt = run.dec[sel] ? P.findIndex(p => Math.abs(p.de - u.de) < 1e-6) : -1;
+  const note = selPt < 0 ? ' · 선택한 단위는 Reject라 없음' : '';
   const layout = Y => ({ ...BASE, title: title('방사형 그래프 (호: De 눈금, s)' + note),
     xaxis: ax({ title: '정밀도 (1/상대오차)', range: [0, X] }), yaxis: ax({ title: '표준화 거리', range: [-Y, Y] }) });
-  const pts = { x: P.map(p => p.radial_x), y: P.map(p => p.radial_y), mode: 'markers', name: '통과한 De', marker: { color: C.pass, size: 9 },
+  const pts = { x: P.map(p => p.radial_x), y: P.map(p => p.radial_y), mode: 'markers', name: 'Accept한 De', marker: { color: C.pass, size: 9 },
     text: P.map(p => `De ${fmt(p.de)} ± ${fmt(p.de_error)} s`), hovertemplate: '%{text}<extra></extra>' };
   let Y = Math.max(3, ...P.map(p => Math.abs(p.radial_y))) * 1.15;
   plot(gd, [pts], layout(Y));
@@ -521,7 +544,7 @@ function renderMap() {
     const c = el('div', label, 'cell');
     if (k >= 0) {
       const x = units[k];
-      c.classList.add(x.rc_status === 'OK' ? 'pass' : 'fail');
+      c.classList.add(run.dec[k] ? 'pass' : 'fail');
       c.title = `${unitLabel(x)} · De ${fmt(x.de)} s`; c.onclick = () => select(k);
       if (k === sel) c.classList.add('cur');
     }
@@ -556,29 +579,40 @@ function renderQC(u) {
 function renderTable() {
   const t = $('units'), only = $('onlyPass').checked; t.replaceChildren();
   const sgMode = run.mode === 'single_grain';
-  const h = el('tr'); [...(sgMode ? ['디스크', '알갱이'] : ['디스크']), 'De (s)', '판정', 'Recycling', '적합', '경고'].forEach(x => h.append(el('th', x))); t.append(h);
+  const h = el('tr'); [...(sgMode ? ['디스크', '알갱이'] : ['디스크']), 'De (s)', '자동 판정', '최종 판정', 'Recycling', '적합', '경고'].forEach(x => h.append(el('th', x))); t.append(h);
   let n = 0;
   U().forEach((u, i) => {
-    const pass = u.rc_status === 'OK'; if (only && !pass) return; n++;
+    const ok = run.dec[i]; if (only && !ok) return; n++;
     const r = el('tr', null, 'pick'); r.dataset.i = i;
     (sgMode ? [u.position, u.grain] : [u.position]).forEach(x => r.append(el('td', x, 'num')));
     const w = el('td', u.warning ? '있음' : ''); if (u.warning) w.title = u.warning;
-    r.append(el('td', `${fmt(u.de)} ± ${fmt(u.de_error)}`, 'num'), el('td', pass ? '● 통과' : '✕ 탈락', pass ? 'ok' : 'no'),
+    const [txt, cls] = DEC(ok);
+    r.append(el('td', `${fmt(u.de)} ± ${fmt(u.de_error)}`, 'num'), el('td', AUTO(u) ? 'Accept' : 'Reject'),
+             el('td', txt + (ok === AUTO(u) ? '' : ' (수동)'), cls),
              el('td', fmt(u.recycling_ratio, 3), 'num'), el('td', u.fit ?? ''), w);
     if (i === sel) r.classList.add('sel');
     r.onclick = () => select(i); t.append(r);
   });
   $('tableCount').textContent = `${n}개 표시 / 전체 ${U().length}개`;
 }
+// Analyst처럼 판정하면 다음 단위로 넘어간다. De가 없는 단위는 Accept할 수 없다(모델에 넣을 값이 없음).
+function decide(ok) {
+  if (ok && U()[sel].de == null) return;
+  if (run.dec[sel] !== ok) { run.dec[sel] = ok; renderTable(); refreshAge(); }
+  select(sel + 1);
+}
+$('accBtn').onclick = () => decide(true);
+$('rejBtn').onclick = () => decide(false);
 $('onlyPass').onchange = renderTable;
 $('prevBtn').onclick = () => select(sel - 1);
 $('nextBtn').onclick = () => select(sel + 1);
 document.addEventListener('keydown', e => {
-  if (!run || tab !== 'dash' || /INPUT|SELECT/.test(document.activeElement.tagName)) return;
+  if (!run || tab !== 'calc' || e.metaKey || e.ctrlKey || e.altKey || /INPUT|SELECT/.test(document.activeElement.tagName)) return;
   if (e.key === 'ArrowLeft') select(sel - 1); else if (e.key === 'ArrowRight') select(sel + 1);
+  else if (e.key === 'a' || e.key === 'A') decide(true); else if (e.key === 'r' || e.key === 'R') decide(false);
 });
 
-// ---- 04 모델
+// ---- 03 모델
 function renderModel() {
   const A = run.age, box = $('modelBox'); box.replaceChildren();
   if (!A.ok) { box.append(el('p', '계산할 수 없음: ' + A.error)); return; }
@@ -593,7 +627,8 @@ function renderModel() {
   } else {
     box.append(el('p', `대표 선량: ${fmt(R.dose)} ± ${fmt(R.dose_error)} s`, 'big'));
   }
-  box.append(el('p', `사용한 De ${R.n}개 · 과분산 ${fmt(A.distribution.od_rel)}% · sigmab ${R.sigmab == null ? '미사용' : R.sigmab}. 최소 개수 기준은 연구자 확인 대기.`, 'note'),
+  const changed = U().filter((u, i) => run.dec[i] !== AUTO(u)).length;
+  box.append(el('p', `사용한 De ${R.n}개(Accept) · 수동 변경 ${changed}개 · 과분산 ${fmt(A.distribution.od_rel)}% · sigmab ${R.sigmab == null ? '미사용' : R.sigmab}. 최소 개수 기준은 연구자 확인 대기.`, 'note'),
              el('p', `${R.package} ${R.package_version} · R ${run.meta.r_version}`, 'note'));
 }
 
@@ -603,9 +638,8 @@ renderContext();
 renderFile();
 fillGrains();
 go(location.hash.slice(1));
-document.fonts.ready.then(() => { syncSeg(); go(location.hash.slice(1)); });   // 글꼴이 바뀌면 탭·버튼 폭이 달라지므로 다시 맞춘다
+document.fonts.ready.then(() => go(location.hash.slice(1)));   // 글꼴이 바뀌면 탭·버튼 폭이 달라지므로 다시 맞춘다
 let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => {
-  syncSeg();
   document.querySelectorAll('.plot').forEach(gd => { if (gd.data) Plotly.relayout(gd, legendLayout(gd)); });   // 그래프 높이가 바뀌면 범례 위치도 다시 계산
-  if (run && tab === 'dash') drawRadial(U()[sel]);
+  if (run && tab === 'calc') drawRadial(U()[sel]);
 }, 150); });

@@ -152,6 +152,12 @@ signatures:
   `web/assets/vendor/` so the lab network needs no CDN); every chart comes from a live
   `api.php` → `run.R` call — nothing precomputed. `api.php` passes only whitelisted `args`
   per action and adds `path` itself, so the browser cannot point R at a server file.
+  Since 2026-09-30 the De step and its distribution share one tab ("De 계산 및 분포"; results
+  appear below the "De 계산" button). The measurement mode is not a UI choice: it follows the
+  file (`single_grain`), so summing a single-grain file per disc is available in R only.
+  Each unit gets a final Accept/Reject that starts from the automatic QC verdict and can be
+  flipped by hand (Analyst-style, advancing to the next unit); the age model uses the final
+  Accepts, and `age_model.json` stores every unit's `auto`/`final` under `selection`.
 - **Deployment — decided (2026-09-25): `git clone` on the lab server, updated with
   `git pull --ff-only`; code is never edited on the server.** Apache's DocumentRoot is `web/`
   only (the repo root would expose `.git/`, `R/`, and uploaded measurement files in
@@ -195,7 +201,7 @@ R/run.R                          web entry point: JSON in → action → JSON ou
 R/selfcheck.R                    analysis-layer self-check (Rscript), including run.R round trips
 php/bridge.php                   run_r() (Rscript call), sample_dir() (id check), list_samples(), sample_table() (BIN header: sample, user, dates) — shared by web/, outside DocumentRoot
 web/index.php                    upload (BIN/RDA → outputs/samples/{id}/raw/) + inspect + sample list
-web/dashboard.php                one sample's dashboard: tree nav, tabs 업로드 / 신호 분석 / 대시보드 / 연령 모델 (#hash); loads inspect.json, the rest via api.php
+web/dashboard.php                one sample's dashboard: tree nav, tabs 업로드 / De 계산 및 분포 / 연령 모델 (#hash); loads inspect.json, the rest via api.php
 web/api.php                      fetch → whitelisted action/args → run.R → JSON (sar/age_model results kept)
 web/assets/                      app.js (charts via plot(): zoom guide, magnifier, expand; SAR form), drop.js (upload drop zone, both pages), app.css (Operate-style tokens), vendor/plotly, fonts/ (Pretendard, OFL)
 version1_streamlit/              the ver.1.0 app, moved intact (imports are relative to it)

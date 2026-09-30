@@ -16,7 +16,7 @@ const ACTIONS = [
     'curve' => [['position', 'record_index', 'grain', 'mode'], true, null],
     'dose_response' => [['position', 'signal_integral', 'background_integral', 'grain', 'mode', 'seed'], true, null],
     'sar' => [['positions', 'signal_integral', 'background_integral', 'mode', 'seed'], true, 'sar.json'],
-    'age_model' => [['de', 'de_error', 'sigmab', 'model', 'max_k'], false, 'age_model.json'],
+    'age_model' => [['de', 'de_error', 'sigmab', 'model', 'max_k', 'selection'], false, 'age_model.json'],
 ];
 
 header('Content-Type: application/json; charset=utf-8');

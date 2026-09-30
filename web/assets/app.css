@@ -128,15 +128,6 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 label { display: inline-flex; align-items: center; gap: 8px; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 12px; }
 
-/* 분절 선택(측정 방식 A/B): 흰 손잡이(.thumb)가 고른 칸으로 스프링처럼 미끄러진다 */
-.seg { position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: #e3e6e5; border-radius: 12px; padding: 3px; }
-.seg .thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; border-radius: 10px; background: var(--bone-white);
-  box-shadow: 0 3px 8px rgba(0,0,0,.12), 0 1px 1px rgba(0,0,0,.06); transition: transform .45s var(--spring), width .45s var(--spring); }
-.seg button { position: relative; z-index: 1; box-shadow: none; background: none; border-radius: 10px; padding: 8px 20px; color: var(--slate-smoke);
-  font-weight: 400; white-space: nowrap; transition: color .25s; }
-.seg button:hover { background: none; color: var(--forest-ink); }
-.seg button.on { color: var(--forest-ink); font-weight: 500; }
-
 /* 채운 버튼(대시보드): 누르면 살짝 작아졌다가 튕겨 돌아옴 */
 button.btn { background: var(--mist); box-shadow: none; transition: transform .35s var(--spring), background .2s, opacity .2s; }
 button.btn:hover { background: #e6eae8; }
