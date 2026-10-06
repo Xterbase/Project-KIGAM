@@ -66,11 +66,9 @@ const ICON = {
   shr: '<svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>',    // ↙↗ 원래 크기
 };
 const gdOf = d => typeof d === 'string' ? $(d) : d;
-const isSide = gd => !!gd.closest('.dash.expanded') && !gd.closest('.big');   // 크게 보기에서 오른쪽 작은 칸
 // 범례는 x축 이름 아래(축에서 78px)에 둔다. Plotly의 범례 위치는 그래프 높이 비율이라 높이에 따라 다시 계산한다.
-// 오른쪽 작은 칸에서는 범례가 축 이름과 겹쳐서 숨긴다.
 function legendLayout(gd) {
-  const on = gd._legend && !isSide(gd), b = on ? 124 : BASE.margin.b, h = Math.max(120, (gd.clientHeight || 380) - BASE.margin.t - b);
+  const on = gd._legend, b = on ? 124 : BASE.margin.b, h = Math.max(120, (gd.clientHeight || 380) - BASE.margin.t - b);
   return { showlegend: on, 'margin.b': b, 'legend.y': -78 / h, 'legend.yanchor': 'top' };
 }
 function plot(div, data, layout) {
@@ -84,21 +82,28 @@ function plot(div, data, layout) {
   if (!gd._events) {
     gd._events = true;
     gd.on('plotly_relayout', () => syncAxes(gd));
+    // 크게 본 그래프의 더블클릭: 확대해 둔 상태면 확대만 풀고(Plotly 기본), 아니면 1행 5열로 돌아간다.
+    gd.on('plotly_doubleclick', () => { if (gd.parentElement.classList.contains('big') && !gd._wasZoomed) toggleBig(gd.parentElement); });
     gd.on('plotly_afterplot', () => { fitTitle(gd); syncAxes(gd); });   // 크기 변경 뒤에도 눈금·축 이름 위치를 다시 잰다
   }
   fitTitle(gd); syncAxes(gd);
   return p;
 }
 const rangeOf = (gd, a) => [...gd._fullLayout[a + 'axis'].range];
-const isZoomed = (gd, a) => { const h = gd._home[a], c = rangeOf(gd, a), e = (h[1] - h[0]) * 1e-3; return c[0] > h[0] + e || c[1] < h[1] - e; };
+const isZoomed = (gd, a) => { if (gd._fullLayout[a + 'axis'].autorange) return false;   // 자동 범위 = 확대 전
+  const h = gd._home[a], c = rangeOf(gd, a), e = (h[1] - h[0]) * 1e-3; return c[0] > h[0] + e || c[1] < h[1] - e; };
 
-// 도구 버튼(돋보기 −/+, 대시보드 네 칸에는 크게 보기)과 두 축의 확대 가이드를 그래프 상자에 한 번만 붙인다.
+// 도구 버튼(돋보기 −/+, 대시보드 다섯 칸에는 크게 보기)과 두 축의 확대 가이드를 그래프 상자에 한 번만 붙인다.
 function addTools(gd) {
   const box = gd.parentElement, tools = el('div', null, 'ptools');
   const btn = (k, tip, fn) => { const b = el('button', null, k); b.type = 'button'; b.innerHTML = ICON[k]; b.title = tip; b.onclick = fn; tools.append(b); return b; };
   btn('zout', '축소', () => zoomBy(gd, 1.6));
   btn('zin', '확대(가운데 기준)', () => zoomBy(gd, 1 / 1.6));
-  if (box.parentElement.classList.contains('dash')) btn('exp', '크게 보기', () => toggleBig(box));
+  if (box.parentElement.classList.contains('dash')) {
+    btn('exp', '크게 보기', () => toggleBig(box));
+    // 더블클릭 직전의 확대 여부를 기억해 둔다(더블클릭 이벤트 때는 Plotly가 이미 범위를 되돌린 뒤라서). 쓰는 곳은 plot()의 plotly_doubleclick.
+    box.addEventListener('mousedown', () => { gd._wasZoomed = !!gd._home && (isZoomed(gd, 'x') || isZoomed(gd, 'y')); }, true);
+  }
   box.append(tools);
   gd._track = {};
   for (const a of ['x', 'y']) {
@@ -125,6 +130,8 @@ function syncAxes(gd) {
   const s = gd._fullLayout._size, ox = gd.offsetLeft, oy = gd.offsetTop, B = gd.parentElement.getBoundingClientRect();
   const rects = q => [...gd.querySelectorAll(q)].map(e => e.getBoundingClientRect()).filter(r => r.width);
   for (const a of ['x', 'y']) {
+    // 자동 범위는 점 크기만큼 픽셀 여백을 둬서 칸 크기가 바뀌면 달라진다. 확대 전(autorange)이면 지금 범위가 곧 전체 범위.
+    if (gd._fullLayout[a + 'axis'].autorange) gd._home[a] = rangeOf(gd, a);
     const { t, th, tip } = gd._track[a], z = isZoomed(gd, a), was = t.classList.contains('show');
     t.classList.toggle('show', z);
     if (!z) { tip.classList.remove('show'); continue; }
@@ -200,7 +207,7 @@ function zoomBy(gd, f) {
   tween(gd, to);
 }
 
-// 크게 보기: 하나는 왼쪽 큰 칸(세 칸 높이), 나머지 셋은 오른쪽 1열. 칸이 바뀌는 움직임은 FLIP으로 부드럽게.
+// 크게 보기: 나머지 넷은 위 1행 4열, 고른 그래프는 그 아래 전체 폭. 칸이 바뀌는 움직임은 FLIP으로 부드럽게.
 function toggleBig(box) {
   const dash = box.parentElement, boxes = [...dash.querySelectorAll(':scope > .plotbox')];
   const first = boxes.map(b => b.getBoundingClientRect()), on = !box.classList.contains('big');
@@ -210,7 +217,7 @@ function toggleBig(box) {
     const e = b.querySelector('.ptools .exp'), big = b.classList.contains('big');
     if (e) { e.innerHTML = ICON[big ? 'shr' : 'exp']; e.title = big ? '원래 크기' : '크게 보기'; }
     const gd = b.querySelector('.plot');
-    if (gd.data) { Plotly.relayout(gd, legendLayout(gd)); Plotly.Plots.resize(gd); }
+    if (gd.data) Plotly.Plots.resize(gd).then(() => Plotly.relayout(gd, legendLayout(gd)));   // 범례 위치는 새 높이로 그린 뒤에 계산
   });
   if (run) drawRadial(U()[sel]);   // 방사형 호는 영역 크기에 맞춰 다시 계산
   boxes.forEach((b, i) => {
@@ -229,7 +236,7 @@ document.querySelectorAll('.howto').forEach(h => h.innerHTML =
   '<span>확대 중에는 축 이름과 눈금 사이의 <span class="dotdemo"></span> 점을 끌어 이동</span>' +
   '<span><b>더블클릭</b> 원래대로</span>' +
   `<span>${ICON.zout}${ICON.zin} 가운데 기준 축소·확대</span>` +
-  (h.nextElementSibling.classList.contains('dash') ? `<span>${ICON.exp} 크게 보기(나머지는 오른쪽 1열 · Esc로 복귀)</span>` : ''));
+  (h.nextElementSibling.classList.contains('dash') ? `<span>${ICON.exp} 크게 보기(고른 그래프가 아래에 크게 · 더블클릭 또는 Esc로 복귀)</span>` : ''));
 
 // ---- 파일 구성에서 바로 얻는 것
 const byDisc = {};
@@ -401,7 +408,7 @@ $('runForm').onsubmit = async e => {
   } finally { clearInterval(tick); $('runBtn').disabled = false; }
 };
 
-// ---- De 분포: 단위 하나를 고르면 네 그래프·지도·표가 함께 바뀐다
+// ---- De 분포: 단위 하나를 고르면 다섯 그래프·지도·표가 함께 바뀐다
 const U = () => run.sar.units;
 const unitLabel = u => run.mode === 'single_grain' ? `디스크 ${u.position} · 알갱이 ${u.grain}` : `디스크 ${u.position}`;
 const DEC = ok => ok ? ['● Accept', 'ok'] : ['✕ Reject', 'no'];
@@ -437,7 +444,7 @@ function select(i) {
   $('accBtn').disabled = u.de == null;
   $('accBtn').title = u.de == null ? 'De가 계산되지 않아 Accept 불가' : 'Accept (A) · 누르면 다음 단위로';
   document.querySelectorAll('#units tr.pick').forEach(r => r.classList.toggle('sel', +r.dataset.i === sel));
-  renderMap(); renderQC(u); drawHist(u); drawRadial(u);
+  renderMap(); renderQC(u); drawHist(u); drawWHist(u); drawRadial(u);
   drawUnitCurve(u, token); drawDR(u, token);
 }
 
@@ -494,6 +501,21 @@ function drawHist(u) {
   const shapes = u.de == null ? [] : [{ type: 'line', x0: u.de, x1: u.de, y0: 0, y1: 1, yref: 'paper', line: { color: C.ink, width: 1.5, dash: 'dash' } }];
   plot('dHist', [bar(no, `Reject (${no.length})` + (noDe ? ` · De 계산 불가 ${noDe}개 제외` : ''), C.fail), bar(ok, `Accept (${ok.length})`, C.pass)],
     { ...BASE, barmode: 'stack', shapes, title: title('De 분포 · 점선 = 선택한 단위'), xaxis: ax({ title: 'De (s)' }), yaxis: ax({ title: '개수' }) }, PC);
+}
+
+// 가중 히스토그램(Analyst의 Weighted histogram): Accept한 De마다 넓이 1인 가우스 곡선(폭 = De 오차)을 그려 더한다.
+// 정밀한 값은 좁고 높게, 불확실한 값은 낮고 넓게 보인다. 넓이 합 = Accept 개수.
+function drawWHist(u) {
+  const P = U().filter((x, i) => run.dec[i] && x.de != null && x.de_error > 0);
+  if (!P.length) { plotMessage('dWHist', 'Accept한 De 없음'); return; }
+  if (!$('dWHist').data) $('dWHist').replaceChildren();
+  const lo = Math.min(...P.map(p => p.de - 3 * p.de_error)), hi = Math.max(...P.map(p => p.de + 3 * p.de_error));
+  const x = [...Array(301)].map((_, k) => lo + (hi - lo) * k / 300);
+  const y = x.map(v => P.reduce((t, p) => t + Math.exp(-0.5 * ((v - p.de) / p.de_error) ** 2) / (p.de_error * Math.sqrt(2 * Math.PI)), 0));
+  const shapes = u.de == null ? [] : [{ type: 'line', x0: u.de, x1: u.de, y0: 0, y1: 1, yref: 'paper', line: { color: C.ink, width: 1.5, dash: 'dash' } }];
+  plot('dWHist', [{ x, y, mode: 'lines', fill: 'tozeroy', fillcolor: 'rgba(0,158,115,0.15)', line: { color: C.pass, width: 1.5 },
+    name: `Accept (${P.length})`, hovertemplate: '%{x:.0f} s: %{y:.3g}<extra></extra>' }],
+    { ...BASE, shapes, title: title('가중 히스토그램 · 점선 = 선택한 단위'), xaxis: ax({ title: 'De (s)' }), yaxis: ax({ title: '밀도 (1/s)', rangemode: 'tozero' }) });
 }
 
 // 방사형 그래프. 원점에서 뻗는 직선 하나가 De 값 하나다(기울기 = log De − log 중심값).

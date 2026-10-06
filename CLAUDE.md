@@ -150,7 +150,9 @@ signatures:
   SAR exists to feed the De distribution, so its results (De, QC verdicts) are shown within
   the distribution view. Built (2026-09-25): plain JS + Plotly (basic bundle, vendored in
   `web/assets/vendor/` so the lab network needs no CDN); every chart comes from a live
-  `api.php` → `run.R` call — nothing precomputed. `api.php` passes only whitelisted `args`
+  `api.php` → `run.R` call — nothing precomputed. The De histogram and the weighted histogram (one
+  unit-area Gaussian per accepted De, width = its error) are binned/summed in the browser from the SAR
+  table: display transforms, not statistics, so they redraw at once on Accept/Reject. `api.php` passes only whitelisted `args`
   per action and adds `path` itself, so the browser cannot point R at a server file.
   Since 2026-09-30 the De step and its distribution share one tab ("De 계산 및 분포"; results
   appear below the "De 계산" button). The measurement mode is not a UI choice: it follows the

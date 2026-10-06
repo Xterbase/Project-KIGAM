@@ -45,7 +45,7 @@ if ($meta === null || $inspect === null) {
       <li data-v="upload"><a class="tab" href="#upload"><span class="dot"></span>업로드<span class="num">01</span></a>
         <div class="sub"><ul><li><a href="#file">파일 선택</a></li><li><a href="#uplist">최근 업로드 목록</a></li></ul></div></li>
       <li data-v="calc"><a class="tab" href="#calc"><span class="dot"></span>De 계산 및 분포<span class="num">02</span></a>
-        <div class="sub"><ul><li><a href="#sigcurve">곡선 보기</a></li><li><a href="#sigrun">분석 조건</a></li><li><a href="#dplots">그래프 4종</a></li><li><a href="#dmap">디스크 지도</a></li><li><a href="#dtable">단위별 결과</a></li><li><a href="#dqc">선택 단위 QC</a></li></ul></div></li>
+        <div class="sub"><ul><li><a href="#sigcurve">곡선 보기</a></li><li><a href="#sigrun">분석 조건</a></li><li><a href="#dplots">그래프 5종</a></li><li><a href="#dmap">디스크 지도</a></li><li><a href="#dtable">단위별 결과</a></li><li><a href="#dqc">선택 단위 QC</a></li></ul></div></li>
       <li data-v="model"><a class="tab" href="#model"><span class="dot"></span>연령 모델<span class="num">03</span></a>
         <div class="sub"><ul><li><a href="#modelBox">추천 · 대표 선량</a></li></ul></div></li>
     </ul>
@@ -121,6 +121,7 @@ if ($meta === null || $inspect === null) {
           <div class="plotbox"><div id="dCurve" class="plot"></div></div>
           <div class="plotbox"><div id="dDR" class="plot"></div></div>
           <div class="plotbox"><div id="dHist" class="plot"></div></div>
+          <div class="plotbox"><div id="dWHist" class="plot"></div></div>
           <div class="plotbox"><div id="dRadial" class="plot"></div></div>
         </div>
         <p class="note">방사형 그래프: Accept한 De만 표시. De는 원점(왼쪽 0)에서 점을 지나는 직선을 오른쪽 호까지 연장해 읽음. 회색 띠(±2) 안이면 자기 오차 범위에서 중심값과 같음.</p>
