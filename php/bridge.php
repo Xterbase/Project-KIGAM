@@ -13,6 +13,7 @@ define('SAMPLES', ROOT . '/outputs/samples');
 define('RSCRIPT', getenv('RSCRIPT') ?: 'Rscript');
 
 const ALLOWED_EXT = ['bin', 'rda', 'rdata'];
+const LIST_SAMPLES = 10;   // 최근 업로드 목록에 보이는 개수
 
 // 샘플 id와 업로드 시각은 한국 시간. php.ini가 UTC로 정해 둔 서버도 있어 여기서 고정한다.
 date_default_timezone_set('Asia/Seoul');
@@ -39,7 +40,7 @@ function read_json(string $path): ?array
     return is_file($path) ? json_decode((string) file_get_contents($path), true) : null;
 }
 
-// 샘플 목록(최신순). 폴더 이름이 시각으로 시작하므로 이름 역순 = 최신순. index.php와 dashboard.php가 함께 쓴다.
+// 샘플 목록(최신 LIST_SAMPLES개). 폴더 이름이 시각으로 시작하므로 이름 역순 = 최신순. index.php와 dashboard.php가 함께 쓴다.
 function list_samples(): array
 {
     $samples = [];
@@ -50,7 +51,7 @@ function list_samples(): array
             $samples[] = ['id' => $id] + $meta;
         }
     }
-    return $samples;
+    return array_slice($samples, 0, LIST_SAMPLES);
 }
 
 // 목록 표의 측정 방식 칸

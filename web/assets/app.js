@@ -114,11 +114,15 @@ function addTools(gd) {
   }
 }
 // 제목이 오른쪽 위 도구 버튼과 가로로 겹치면(좁은 칸) 상자 위쪽을 넓혀 제목을 버튼 줄 아래로 내린다.
+// 대시보드 다섯 칸은 제목 높이가 같아야 하므로 하나라도 겹치면 모두 내린다.
 // 가로 위치만 비교하므로 위쪽 여백을 바꿔도 판정이 뒤집히지 않는다.
 function fitTitle(gd) {
-  const ttl = gd.querySelector('.gtitle'), tools = gd.parentElement.querySelector('.ptools');
-  if (!ttl || !tools) return;
-  gd.parentElement.classList.toggle('crowded', ttl.getBoundingClientRect().right > tools.getBoundingClientRect().left - 6);
+  const box = gd.parentElement, dash = box.parentElement.classList.contains('dash') ? box.parentElement : null;
+  const boxes = dash ? [...dash.querySelectorAll(':scope > .plotbox')] : [box];
+  const over = b => { const t = b.querySelector('.gtitle'), tools = b.querySelector('.ptools');
+    return !!t && !!tools && t.getBoundingClientRect().right > tools.getBoundingClientRect().left - 6; };
+  const crowded = boxes.some(over);
+  boxes.forEach(b => b.classList.toggle('crowded', crowded));
 }
 function hideAxes(gd) { if (gd._track) Object.values(gd._track).forEach(({ t, tip }) => { t.classList.remove('show'); tip.classList.remove('show'); }); }
 
@@ -224,9 +228,11 @@ function toggleBig(box) {
     const l = b.getBoundingClientRect(), f = first[i], gd = b.querySelector('.plot');
     b.animate([{ transformOrigin: 'top left', transform: `translate(${f.left - l.left}px, ${f.top - l.top}px) scale(${f.width / l.width}, ${f.height / l.height})` },
                { transformOrigin: 'top left', transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.34, 1.2, .64, 1)' });
-    gd.animate([{ opacity: .35 }, { opacity: 1 }], { duration: 480, easing: 'ease-out' }).finished.then(() => syncAxes(gd));   // 움직이는 중에 잰 위치는 틀리므로 끝난 뒤 다시 잰다
+    gd.animate([{ opacity: .35 }, { opacity: 1 }], { duration: 480, easing: 'ease-out' }).finished.then(() => {
+      syncAxes(gd);   // 움직이는 중에 잰 위치는 틀리므로 끝난 뒤 다시 잰다
+      if (on && b === box) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });   // 아래에 뜬 큰 그래프가 보이게 살짝 내려감
+    });
   });
-  if (on) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { const b = document.querySelector('.plotbox.big'); if (b) toggleBig(b); } });
 
@@ -286,10 +292,11 @@ function renderContext() {
 
 // ---- 01 파일
 function renderFile() {
-  const facts = [[B.file, '파일'], [SG ? 'single-grain' : 'single-aliquot', '측정 방식'], [I.n_positions, '디스크'],
-    [SG ? I.grains.length : '—', '알갱이'], [I.records.length, '레코드'], [arr(I.record_types).join(', '), '레코드 종류'], [NCH, '채널 수(OSL)']];
-  if (I.object_name) facts.push([I.object_name, 'RDA 객체']);
+  // 2행 4열: 1행은 파일 자체, 2행은 파일 구성
+  const facts = [[B.file, '파일'], [SG ? 'single-grain' : 'single-aliquot', '측정 방식'], [NCH, '채널 수(OSL)'], [I.object_name || '—', 'RDA 객체'],
+    [I.n_positions, '디스크'], [SG ? I.grains.length : '—', '알갱이'], [I.records.length, '레코드'], [arr(I.record_types).join(', '), '레코드 종류']];
   facts.forEach(([v, k]) => { const d = el('div'); d.append(el('span', k), el('b', v)); $('facts').append(d); });
+  $('reupBtn').onclick = () => { $('upForm').hidden = false; $('reupBtn').hidden = true; };   // 끌어다 놓기 영역을 처음 상태로 다시 보임
   if (arr(I.ignored_objects).length) $('facts').append(el('p', `RDA 안의 다른 객체 ${arr(I.ignored_objects).join(', ')}는 사용하지 않음.`, 'note'));
 
   const t = $('discs'), h = el('tr'); ['디스크', '알갱이 수', '알갱이 번호'].forEach(x => h.append(el('th', x))); t.append(h);
@@ -336,7 +343,7 @@ async function showSignal() {
   try {
     const c = (await cached('curve', { position: p, record_index: i, ...(SG ? { grain: g } : {}) })).result;
     if (token !== sigToken) return;
-    sigCurve = { c, text: `디스크 ${p}` + (SG ? ` · 알갱이 ${g}` : '') + ` · #${i} ${rec.ltype}` };
+    sigCurve = { c, text: `Disc ${p}` + (SG ? ` · Grain ${g}` : '') + ` · #${i} ${rec.ltype}` };
     drawSignal();
     $('curveInfo').textContent = `측정 온도 ${rec.temperature}°C · 재생 선량 ${rec.irr_time} s · 채널 ${c.x.length}개. 곡선에 마우스를 올리면 채널 번호 표시.`;
   } catch (e) { if (token === sigToken) plotMessage('curvePlot', '곡선을 불러오지 못함: ' + e.message); }
@@ -440,7 +447,6 @@ function select(i) {
       + ` · Recycling ${fmt(u.recycling_ratio, 3)}` + (u.warning ? ' · 경고 있음' : '')));
   $('prevBtn').disabled = sel === 0;
   $('nextBtn').disabled = sel === units.length - 1;
-  $('accBtn').classList.toggle('primary', ok); $('rejBtn').classList.toggle('primary', !ok);
   $('accBtn').disabled = u.de == null;
   $('accBtn').title = u.de == null ? 'De가 계산되지 않아 Accept 불가' : 'Accept (A) · 누르면 다음 단위로';
   document.querySelectorAll('#units tr.pick').forEach(r => r.classList.toggle('sel', +r.dataset.i === sel));
@@ -455,7 +461,7 @@ async function drawUnitCurve(u, token) {
   try {
     const c = (await cached('curve', args)).result;
     if (token !== selToken) return;
-    drawCurve('dCurve', c, '신호 곡선 · ' + (!sgMode && SG ? '디스크 합산 · ' : '') + '자연 신호', parseRange(run.sig), parseRange(run.bg));
+    drawCurve('dCurve', c, 'Natural decay curve' + (!sgMode && SG ? ' · disc sum' : ''), parseRange(run.sig), parseRange(run.bg));
   } catch (e) { if (token === selToken) plotMessage('dCurve', '곡선을 불러오지 못함: ' + e.message); }
 }
 
@@ -482,7 +488,7 @@ async function drawDR(u, token) {
     shapes.push({ type: 'line', x0: 0, x1: d.de, y0: nat.lxtx, y1: nat.lxtx, line: { color: C.natural, dash: 'dot', width: 1 } },
                 { type: 'line', x0: d.de, x1: d.de, y0: 0, y1: nat.lxtx, line: { color: C.natural, dash: 'dot', width: 1 } });
   }
-  plot('dDR', traces, { ...BASE, shapes, title: title('선량-반응 곡선' + (d.de == null ? ' · De 계산 불가' : '')),
+  plot('dDR', traces, { ...BASE, shapes, title: title('Dose-response curve' + (d.de == null ? ' · no De' : '')),
     xaxis: ax({ title: '재생 선량 (s)', rangemode: 'tozero' }), yaxis: ax({ title: 'Lx/Tx', rangemode: 'tozero' }) }, PC);
 }
 
@@ -500,7 +506,7 @@ function drawHist(u) {
     hovertemplate: '%{customdata} s: %{y}개<extra>' + name + '</extra>' });
   const shapes = u.de == null ? [] : [{ type: 'line', x0: u.de, x1: u.de, y0: 0, y1: 1, yref: 'paper', line: { color: C.ink, width: 1.5, dash: 'dash' } }];
   plot('dHist', [bar(no, `Reject (${no.length})` + (noDe ? ` · De 계산 불가 ${noDe}개 제외` : ''), C.fail), bar(ok, `Accept (${ok.length})`, C.pass)],
-    { ...BASE, barmode: 'stack', shapes, title: title('De 분포 · 점선 = 선택한 단위'), xaxis: ax({ title: 'De (s)' }), yaxis: ax({ title: '개수' }) }, PC);
+    { ...BASE, barmode: 'stack', shapes, title: title('Histogram'), xaxis: ax({ title: 'De (s)' }), yaxis: ax({ title: '개수' }) }, PC);
 }
 
 // 가중 히스토그램(Analyst의 Weighted histogram): Accept한 De마다 넓이 1인 가우스 곡선(폭 = De 오차)을 그려 더한다.
@@ -515,7 +521,7 @@ function drawWHist(u) {
   const shapes = u.de == null ? [] : [{ type: 'line', x0: u.de, x1: u.de, y0: 0, y1: 1, yref: 'paper', line: { color: C.ink, width: 1.5, dash: 'dash' } }];
   plot('dWHist', [{ x, y, mode: 'lines', fill: 'tozeroy', fillcolor: 'rgba(0,158,115,0.15)', line: { color: C.pass, width: 1.5 },
     name: `Accept (${P.length})`, hovertemplate: '%{x:.0f} s: %{y:.3g}<extra></extra>' }],
-    { ...BASE, shapes, title: title('가중 히스토그램 · 점선 = 선택한 단위'), xaxis: ax({ title: 'De (s)' }), yaxis: ax({ title: '밀도 (1/s)', rangemode: 'tozero' }) });
+    { ...BASE, shapes, title: title('Weighted histogram'), xaxis: ax({ title: 'De (s)' }), yaxis: ax({ title: '밀도 (1/s)', rangemode: 'tozero' }) });
 }
 
 // 방사형 그래프. 원점에서 뻗는 직선 하나가 De 값 하나다(기울기 = log De − log 중심값).
@@ -530,8 +536,7 @@ function drawRadial(u) {
   const raw = (hi - lo) / 4 || lo / 4, mag = 10 ** Math.floor(Math.log10(raw)), step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(m => m >= raw);
   const ticks = []; for (let v = Math.max(step, Math.floor(lo / step) * step); v <= Math.ceil(hi / step) * step + 1e-9; v += step) ticks.push(v);
   const selPt = run.dec[sel] ? P.findIndex(p => Math.abs(p.de - u.de) < 1e-6) : -1;
-  const note = selPt < 0 ? ' · 선택한 단위는 Reject라 없음' : '';
-  const layout = Y => ({ ...BASE, title: title('방사형 그래프 (호: De 눈금, s)' + note),
+  const layout = Y => ({ ...BASE, title: title('Radial plot'),
     xaxis: ax({ title: '정밀도 (1/상대오차)', range: [0, X] }), yaxis: ax({ title: '표준화 거리', range: [-Y, Y] }) });
   const pts = { x: P.map(p => p.radial_x), y: P.map(p => p.radial_y), mode: 'markers', name: 'Accept한 De', marker: { color: C.pass, size: 9 },
     text: P.map(p => `De ${fmt(p.de)} ± ${fmt(p.de_error)} s`), hovertemplate: '%{text}<extra></extra>' };
@@ -620,6 +625,8 @@ function renderTable() {
 // Analyst처럼 판정하면 다음 단위로 넘어간다. De가 없는 단위는 Accept할 수 없다(모델에 넣을 값이 없음).
 function decide(ok) {
   if (ok && U()[sel].de == null) return;
+  const b = $(ok ? 'accBtn' : 'rejBtn');   // 키보드(A/R)로 눌러도 누른 버튼에 검은 테두리를 잠깐 보인다
+  b.classList.remove('hit'); void b.offsetWidth; b.classList.add('hit');
   if (run.dec[sel] !== ok) { run.dec[sel] = ok; renderTable(); refreshAge(); }
   select(sel + 1);
 }

@@ -43,7 +43,7 @@ if ($meta === null || $inspect === null) {
     <ul class="tree" id="tree">
       <li class="pill" id="pill" aria-hidden="true"></li>
       <li data-v="upload"><a class="tab" href="#upload"><span class="dot"></span>업로드<span class="num">01</span></a>
-        <div class="sub"><ul><li><a href="#file">파일 선택</a></li><li><a href="#uplist">최근 업로드 목록</a></li></ul></div></li>
+        <div class="sub"><ul><li><a href="#file">업로드 파일정보</a></li><li><a href="#uplist">최근 업로드 목록</a></li></ul></div></li>
       <li data-v="calc"><a class="tab" href="#calc"><span class="dot"></span>De 계산 및 분포<span class="num">02</span></a>
         <div class="sub"><ul><li><a href="#sigcurve">곡선 보기</a></li><li><a href="#sigrun">분석 조건</a></li><li><a href="#dplots">그래프 5종</a></li><li><a href="#dmap">디스크 지도</a></li><li><a href="#dtable">단위별 결과</a></li><li><a href="#dqc">선택 단위 QC</a></li></ul></div></li>
       <li data-v="model"><a class="tab" href="#model"><span class="dot"></span>연령 모델<span class="num">03</span></a>
@@ -56,21 +56,22 @@ if ($meta === null || $inspect === null) {
 
     <section class="view" id="upload">
       <p class="axis">01 · 업로드</p>
-      <h2>측정 파일 올리기</h2>
+      <!-- 이미 올린 파일을 보는 화면이라 끌어다 놓기 영역은 숨겨 두고, '다른 파일 올리기'를 누르면 보인다. -->
+      <div class="headrow"><h2>측정 파일 올리기</h2><button class="btn" type="button" id="reupBtn">다른 파일 올리기</button></div>
       <!-- 업로드 처리는 index.php가 한다(저장 → inspect → 새 대시보드로 이동). -->
-      <form method="post" action="./" enctype="multipart/form-data" id="upForm">
+      <form method="post" action="./" enctype="multipart/form-data" id="upForm" hidden>
         <label class="drop" id="drop">
           <input type="file" name="bin" accept=".bin,.BIN,.rda,.rdata,.RData" hidden>
           <b>BIN / RDA 파일을 끌어다 놓기</b><span class="note">또는 눌러서 선택 · 올리면 파일 구성을 읽고 새 대시보드로 이동(수 초 소요)</span>
         </label>
       </form>
 
-      <h3 id="file">파일 선택</h3>
+      <h3 id="file">업로드 파일정보</h3>
       <div class="card facts" id="facts"></div>
       <h3>디스크 목록</h3>
       <div class="tablewrap"><table id="discs"></table></div>
 
-      <h3 id="uplist">최근 업로드 목록</h3>
+      <h3 id="uplist">최근 업로드 목록(최근 10개 파일)</h3>
       <?php sample_table(list_samples(), $id); ?>
     </section>
 
@@ -124,7 +125,7 @@ if ($meta === null || $inspect === null) {
           <div class="plotbox"><div id="dWHist" class="plot"></div></div>
           <div class="plotbox"><div id="dRadial" class="plot"></div></div>
         </div>
-        <p class="note">방사형 그래프: Accept한 De만 표시. De는 원점(왼쪽 0)에서 점을 지나는 직선을 오른쪽 호까지 연장해 읽음. 회색 띠(±2) 안이면 자기 오차 범위에서 중심값과 같음.</p>
+        <p class="note">Histogram · Weighted histogram: 점선 = 선택한 단위. Radial plot: Accept한 De만 표시. 호의 눈금 = De(s). De는 원점(왼쪽 0)에서 점을 지나는 직선을 오른쪽 호까지 연장해 읽음. 회색 띠(±2) 안이면 자기 오차 범위에서 중심값과 같음.</p>
         <div class="lower">
           <div id="dmap">
             <div class="row"><b id="mapTitle"></b> <select id="mapDisc"></select></div>

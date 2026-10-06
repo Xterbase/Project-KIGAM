@@ -84,7 +84,7 @@ $samples = list_samples();
     </label>
   </form>
 
-  <p class="axis" style="margin-top:48px">최근 업로드 목록</p>
+  <p class="axis" style="margin-top:48px">최근 업로드 목록(최근 10개 파일)</p>
   <?php if (!$samples): ?>
     <p class="note">아직 올린 파일 없음.</p>
   <?php else: ?>
