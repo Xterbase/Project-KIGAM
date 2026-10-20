@@ -39,7 +39,7 @@ if ($meta === null || $inspect === null) {
   <nav>
     <div class="brand">Luminous</div>
     <div class="file"><?= h($meta['original_name']) ?></div>
-    <!-- 트리 메뉴: 선택한 탭은 흰 박스(pill)가 되어 오른쪽 내용 패널과 한 덩어리로 이어진다. 하위 항목은 선택한 탭에서만 펼침. -->
+    <!-- 트리 메뉴: 선택한 탭은 흰 박스(pill)가 감싼다(내용 패널과는 떨어진 상자). 하위 항목은 선택한 탭에서만 펼침. -->
     <ul class="tree" id="tree">
       <li class="pill" id="pill" aria-hidden="true"></li>
       <li data-v="upload"><a class="tab" href="#upload"><span class="dot"></span>업로드<span class="num">01</span></a>
