@@ -55,7 +55,7 @@ if ($meta === null || $inspect === null) {
     <div class="context" id="context"></div>
 
     <section class="view" id="upload">
-      <p class="axis">01 · 업로드</p>
+      <p class="axis">업로드</p>
       <!-- 이미 올린 파일을 보는 화면이라 끌어다 놓기 영역은 숨겨 두고, '다른 파일 올리기'를 누르면 보인다. -->
       <div class="headrow"><h2>측정 파일 올리기</h2><button class="btn" type="button" id="reupBtn">다른 파일 올리기</button></div>
       <!-- 업로드 처리는 index.php가 한다(저장 → inspect → 새 대시보드로 이동). -->
@@ -77,7 +77,7 @@ if ($meta === null || $inspect === null) {
 
     <!-- De 계산 전에는 곡선과 분석 조건만 보이고, 계산하면 그 아래에 분포 결과(distBody)가 나타난다. -->
     <section class="view" id="calc">
-      <p class="axis">02 · De 계산 및 분포</p>
+      <p class="axis">De 계산 및 분포</p>
       <h2>신호 곡선과 분석 조건</h2>
       <div class="row" id="sigcurve">
         <label>디스크 <select id="selPos"></select></label>
@@ -148,7 +148,7 @@ if ($meta === null || $inspect === null) {
     </section>
 
     <section class="view" id="model">
-      <p class="axis">03 · 연령 모델</p>
+      <p class="axis">연령 모델</p>
       <h2>연령 모델</h2>
       <div class="card" id="modelBox"><p class="note">De 계산 대기.</p></div>
     </section>
