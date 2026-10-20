@@ -106,20 +106,22 @@ a:hover { text-decoration: underline; }
 
 button, input, select { font: inherit; letter-spacing: inherit; color: var(--forest-ink); }
 
+/* 버튼 = Liquid Glass. 기본은 thin 유리(뒤를 흐림 + 위쪽 반사광), 색 버튼은 그 색이 비치는 유리. */
 button {
   cursor: pointer;
-  background: transparent;
+  background: var(--mat-thin);
+  -webkit-backdrop-filter: blur(12px) saturate(180%); backdrop-filter: blur(12px) saturate(180%);
   border: 0;
-  box-shadow: inset 0 0 0 0.5px var(--forest-ink);
+  box-shadow: var(--glass-edge), 0 2px 8px rgba(0,0,0,.08);
   border-radius: var(--radius-panel);
   padding: 8px 16px;
   font-weight: 500;
 }
-button:hover { background: var(--ash-gray); }
-button:disabled { opacity: 0.4; cursor: default; background: transparent; }
-button.primary { background: var(--moss); box-shadow: none; padding: 10px 20px; }
-button.primary:hover { background: #77b286; }
-button.primary:disabled { background: var(--moss); }
+button:hover { background: rgba(255,255,255,.62); }
+button:disabled { opacity: 0.4; cursor: default; background: var(--mat-thin); }
+button.primary { background: color-mix(in srgb, var(--moss) 85%, transparent); padding: 10px 20px; }
+button.primary:hover { background: color-mix(in srgb, #77b286 90%, transparent); }
+button.primary:disabled { background: color-mix(in srgb, var(--moss) 85%, transparent); }
 
 input[type=text], input[type=number], select {
   background: var(--bone-white);
@@ -127,6 +129,19 @@ input[type=text], input[type=number], select {
   box-shadow: inset 0 0 0 0.5px var(--slate-smoke);
   border-radius: var(--radius-tag);
   padding: 6px 8px;
+}
+/* 드롭다운: 닫힌 상자와 펼친 목록 모두 패널·박스와 같은 곡률. 펼친 목록은 thin 유리.
+   shortcut: 펼친 목록 꾸미기(appearance: base-select)는 Chromium 계열만 지원. Safari는 운영체제 기본 메뉴가 뜸 — Safari가 지원하면 그대로 적용됨. */
+select { border-radius: var(--radius-panel); }
+@supports (appearance: base-select) {
+  select, ::picker(select) { appearance: base-select; }
+  select { display: inline-flex; align-items: center; }   /* ▼를 글자 높이 가운데에 */
+  ::picker(select) { border: 0; margin-top: 4px; padding: 4px; border-radius: var(--radius-panel); background: rgba(255,255,255,.72);
+    -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); box-shadow: var(--glass-edge), 0 8px 24px rgba(0,0,0,.15); }
+  select option { padding: 6px 10px; border-radius: calc(var(--radius-panel) - 2px); }
+  select option:hover, select option:focus-visible { background: rgba(0,0,0,.06); }
+  select option:checked { font-weight: 500; }
+  select::picker-icon { font-size: 9px; color: var(--slate-smoke); margin-left: 6px; }   /* 기본 ▼가 글자만큼 커서 작게 */
 }
 input[type=text] { width: 96px; font-variant-numeric: tabular-nums; }
 input[type=text]:invalid, input[type=number]:invalid { box-shadow: inset 0 0 0 1px var(--fail); }
@@ -141,23 +156,25 @@ label { display: inline-flex; align-items: center; gap: 8px; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 12px; }
 
 /* 채운 버튼(대시보드): 누르면 살짝 작아졌다가 튕겨 돌아옴 */
-button.btn { background: var(--mist); box-shadow: none; transition: transform .35s var(--spring), background .2s, opacity .2s; }
-button.btn:hover { background: #e6eae8; }
+button.btn { transition: transform .35s var(--spring), background .2s, opacity .2s; }
 button.btn:active { transform: scale(.95); transition-duration: .1s; }
-button.btn.primary { background: var(--moss); padding: 11px 24px; }
-button.btn.primary:hover { background: #77b286; }
+button.btn.primary { padding: 11px 24px; }
 button.btn:disabled { transform: none; }
 
-/* 스위치(통과만 보기): 누르는 동안 손잡이가 살짝 늘어남 */
+/* 스위치(Accept만 보기), Liquid Glass 토글: 트랙은 유리, 손잡이는 알약 모양. 누르는 동안 손잡이가 커지며
+   투명한 렌즈가 되어 아래 트랙이 비친다(iOS 26 토글 동작을 흉내). */
 .switch { cursor: pointer; user-select: none; font-size: 13px; gap: 10px; }
 .switch input { display: none; }
-.switch .track { position: relative; width: 46px; height: 28px; border-radius: 14px; background: #d5dad9; transition: background .3s var(--ease); }
-.switch .knob { position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 50%; background: var(--bone-white);
-  box-shadow: 0 3px 8px rgba(0,0,0,.15), 0 1px 1px rgba(0,0,0,.08); transition: transform .4s var(--spring), width .2s var(--ease); }
-.switch:active .knob { width: 28px; }
+.switch .track { position: relative; width: 52px; height: 28px; border-radius: 14px; background: rgba(120,120,128,.18);
+  -webkit-backdrop-filter: blur(10px) saturate(180%); backdrop-filter: blur(10px) saturate(180%);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.08), inset 0 0 0 .5px rgba(255,255,255,.5); transition: background .3s var(--ease); }
+.switch .knob { position: absolute; top: 2px; left: 2px; width: 30px; height: 24px; border-radius: 12px; background: rgba(255,255,255,.95);
+  box-shadow: var(--glass-edge), 0 2px 6px rgba(0,0,0,.18), 0 .5px 1px rgba(0,0,0,.1);
+  transition: transform .45s var(--spring), background .25s var(--ease), box-shadow .25s var(--ease); }
+.switch:active .knob { transform: scale(1.18); background: rgba(255,255,255,.28); box-shadow: var(--glass-edge), 0 4px 14px rgba(0,0,0,.18); }
 .switch input:checked + .track { background: var(--pass); }
 .switch input:checked + .track .knob { transform: translateX(18px); }
-.switch:active input:checked + .track .knob { transform: translateX(14px); }
+.switch:active input:checked + .track .knob { transform: translateX(18px) scale(1.18); }
 
 /* 표 */
 .tablewrap { overflow: auto; max-height: 420px; border-radius: var(--radius-card); box-shadow: var(--hairline); background: var(--bone-white); }
@@ -274,9 +291,11 @@ li.on .sub li:nth-child(4) a { transition-delay: .15s; }
 
 /* 그래프 도구: 돋보기 −/+ · 크게 보기(기본 Plotly 도구 막대 대신) */
 .ptools { position: absolute; top: 10px; right: 12px; z-index: 5; display: flex; gap: 4px; }
-.ptools button { width: 32px; height: 32px; padding: 0; border-radius: var(--radius-panel); box-shadow: none; background: rgba(241,243,242,.85);
-  display: grid; place-items: center; transition: transform .35s var(--spring), background .2s; }
-.ptools button:hover { background: #e3e8e6; }
+/* 그래프 도구(돋보기·확대·축소·크게 보기): thin 유리 버튼. 아래 그래프 선이 흐리게 비친다. */
+.ptools button { width: 32px; height: 32px; padding: 0; border-radius: var(--radius-panel); background: var(--mat-thin);
+  -webkit-backdrop-filter: blur(12px) saturate(180%); backdrop-filter: blur(12px) saturate(180%);
+  box-shadow: var(--glass-edge), 0 2px 8px rgba(0,0,0,.1); display: grid; place-items: center; transition: transform .35s var(--spring), background .2s; }
+.ptools button:hover { background: rgba(255,255,255,.62); }
 .ptools button:active { transform: scale(.88); transition-duration: .1s; }
 .ptools svg, .howto svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .ptools svg { width: 17px; height: 17px; }
@@ -316,8 +335,8 @@ li.on .sub li:nth-child(4) a { transition-delay: .15s; }
 .selbar .big { font-size: 20px; font-weight: 500; }
 /* Accept는 초록, Reject는 빨강으로 고정. 누른 순간만 검은 테두리(.hit: 키보드로 눌렀을 때도) */
 button.btn#accBtn, button.btn#rejBtn { color: #fff; }
-button.btn#accBtn { background: var(--pass); }
-button.btn#rejBtn { background: var(--fail); }
+button.btn#accBtn { background: color-mix(in srgb, var(--pass) 85%, transparent); }
+button.btn#rejBtn { background: color-mix(in srgb, var(--fail) 85%, transparent); }
 button.btn#accBtn:hover, button.btn#rejBtn:hover { filter: brightness(1.08); }
 button.btn#accBtn:active, button.btn#rejBtn:active { box-shadow: 0 0 0 2px #000; }
 button.btn.hit { animation: hit .35s ease-out; }
@@ -342,13 +361,14 @@ button.btn.hit { animation: hit .35s ease-out; }
   .panel { padding: 24px 18px; }
 }
 
-/* 디스크 지도: 구멍은 원. 통과·탈락은 채운 원, 파일에 없는 구멍은 빈 원. */
+/* 디스크 지도: 구멍은 원. 파일에 없는 구멍은 thin 유리 원, 통과·탈락은 판정색이 비치는 유리 원(탭 아이콘과 같은 재질). */
 .map { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
 .map.discs { grid-template-columns: repeat(6, 1fr); }
 .cell { aspect-ratio: 1; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px;
-        color: var(--slate-smoke); box-shadow: inset 0 0 0 0.5px var(--lichen); user-select: none; }
-.cell.pass { background: var(--pass); color: var(--bone-white); box-shadow: none; cursor: pointer; }
-.cell.fail { background: var(--fail); color: var(--bone-white); box-shadow: none; cursor: pointer; }
+        color: var(--slate-smoke); background: var(--mat-thin); -webkit-backdrop-filter: blur(10px) saturate(180%); backdrop-filter: blur(10px) saturate(180%);
+        box-shadow: var(--glass-edge), 0 1px 3px rgba(0,0,0,.1); user-select: none; }
+.cell.pass { background: color-mix(in srgb, var(--pass) 82%, transparent); color: var(--bone-white); cursor: pointer; }
+.cell.fail { background: color-mix(in srgb, var(--fail) 82%, transparent); color: var(--bone-white); cursor: pointer; }
 .cell.cur { outline: 2px solid var(--forest-ink); outline-offset: 1px; }
 .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--slate-smoke); margin-top: 8px; }
 .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
