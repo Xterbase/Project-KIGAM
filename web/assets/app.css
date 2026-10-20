@@ -30,6 +30,7 @@
   --deep-fern: #007010;    /* 링크 */
   --emerald: #008023;      /* 데이터 점 */
   --indigo-accent: #433787; /* 페이지당 한 번: 자연 신호 → De 표시 */
+  --blue: #007aff;         /* 진행 중인 탭 표시(iOS 시스템 파랑) */
 
   /* 판정 색은 스타일 참조 밖에서 유지한다(Okabe-Ito, 색각 이상에서도 통과/탈락 구분). */
   --pass: #009e73;
@@ -57,10 +58,14 @@ body {
   letter-spacing: 0.012em;
   font-feature-settings: "liga" 0;
   color: var(--forest-ink);
-  background-color: var(--sage-paper);
-  /* 캔버스 전체에 옅은 점 격자(그래프 용지 느낌). */
-  background-image: radial-gradient(var(--lichen) 0.8px, transparent 0.8px);
-  background-size: 16px 16px;
+  background-color: #d6c8b1;
+}
+/* 캔버스: 등고선 종이(topo.svg)를 iOS 제어센터처럼 흐리게 깐다. Apple은 Liquid Glass의 blur 수치를
+   공개하지 않아(HIG Materials: "blurs and adjusts the luminosity") 근삿값으로 둔다. inset 음수는 흐린 가장자리 숨김. */
+body::before {
+  content: ""; position: fixed; inset: -80px; z-index: -1; pointer-events: none;
+  background: linear-gradient(rgba(255,255,255,.22), rgba(255,255,255,.22)), url("topo.svg") center / cover;
+  filter: blur(30px) saturate(180%);
 }
 
 h1, h2, h3 { font-weight: 500; margin: 0; letter-spacing: 0; }
@@ -200,9 +205,13 @@ nav .file { font-size: 12px; color: var(--slate-smoke); padding-left: 6px; margi
   display: grid; place-items: center; font-size: 11px; flex: none; transition: background .3s, box-shadow .3s, transform .4s var(--spring); }
 .tab .num { font-size: 12px; color: var(--slate-smoke); margin-left: auto; padding-left: 18px; font-variant-numeric: tabular-nums; font-weight: 400; }
 li.on > .tab { color: var(--forest-ink); font-weight: 500; }
-li.on .dot { background: var(--forest-ink); box-shadow: none; transform: scale(1.1); }
 li.done .dot { background: var(--moss); box-shadow: none; }
 li.done .dot::after { content: "✓"; color: var(--bone-white); }
+/* 진행 중인 탭: 파란 원 + 흰 오른쪽 화살표(완료 ✓보다 뒤에 두어 둘 다일 때 화살표가 이김) */
+li.on .dot { background: var(--blue); box-shadow: none; transform: scale(1.1); }
+li.on .dot::after { content: ""; width: 11px; height: 11px; background: var(--bone-white);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6h7M6 2.5 9.5 6 6 9.5' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6h7M6 2.5 9.5 6 6 9.5' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; }
 /* 하위 항목(├──): 선택한 탭에서만 펼침(높이는 grid 0fr → 1fr로 부드럽게) */
 .sub { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .45s var(--ease); }
 li.on .sub { grid-template-rows: 1fr; }
@@ -218,7 +227,7 @@ li.on .sub li:nth-child(4) a { transition-delay: .15s; }
 .sub ul li:last-child { padding-bottom: 14px; }
 
 /* 오른쪽 내용 패널: 선택 박스와 같은 흰 종이. 안쪽 카드·표는 옅은 면으로 구분한다. */
-.panel { background: var(--bone-white); border-radius: var(--radius-panel); padding: 36px 40px 48px; min-width: 0; }
+.panel { background: var(--bone-white); border-radius: var(--radius-panel); padding: 30px 32px 40px; min-width: 0; }
 .panel .card { background: var(--mist); box-shadow: none; border-radius: 16px; padding: 22px; }
 .panel .tablewrap { box-shadow: inset 0 0 0 1px var(--mist); border-radius: 14px; }
 .panel h2 { font-size: 24px; margin-bottom: 22px; }
