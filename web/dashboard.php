@@ -149,7 +149,7 @@ if ($meta === null || $inspect === null) {
 
     <section class="view" id="model">
       <p class="axis">연령 모델</p>
-      <h2>연령 모델</h2>
+      <h2>통계기반 모델 추천</h2>
       <div class="card" id="modelBox"><p class="note">De 계산 대기.</p></div>
     </section>
   </main>

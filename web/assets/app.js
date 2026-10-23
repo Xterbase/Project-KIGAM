@@ -16,13 +16,15 @@ const C = {
 // 기본 도구 막대는 숨긴다. 조작: 드래그 = 상자 확대, 더블클릭 = 원래대로, 도구는 그래프 상자 오른쪽 위의 돋보기·크게 보기뿐.
 const PC = { responsive: true, displaylogo: false, displayModeBar: false, doubleClick: 'reset', showTips: false };
 const AX = { gridcolor: C.line, griddash: 'dot', zeroline: false, linecolor: C.ink, linewidth: 0.5 };
-// 축 이름은 눈금 숫자에서 30px 띄운다(그 틈에 확대 가이드 선이 들어감). 왼쪽·아래 여백도 그만큼 넓다.
+// 축 이름은 눈금 숫자에서 30px 띄운다(그 틈에 확대 가이드 선이 들어감). 아래 여백도 그만큼 넓다.
+// 왼쪽 여백은 automargin으로 y축 이름이 그래프 왼쪽 끝(제목 왼쪽 + 1px)에 오게 잡는다(plot()에서 고정).
 const ax = o => ({ ...AX, ...o, ...(typeof o.title === 'string' ? { title: { text: o.title, standoff: 30 } } : {}) });
 const BASE = {
-  margin: { l: 86, r: 18, t: 40, b: 70 }, font: { family: C.font, size: 12, color: C.ink },
+  margin: { l: 1, r: 18, t: 40, b: 70 }, font: { family: C.font, size: 12, color: C.ink },
   paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', legend: { orientation: 'h', y: -0.22 },
 };
-const title = text => ({ text, font: { size: 14 }, x: 0, xanchor: 'left' });
+// 제목은 도구 버튼과 같은 줄(왼쪽 위). 길면 fitTitle()이 글자를 줄인다.
+const title = text => ({ text, font: { size: 14 }, x: 0, xanchor: 'left', y: 1, yref: 'container', yanchor: 'top', pad: { t: 4 } });
 
 const SIGMAB = { single_grain: 0.20, single_aliquot: 0.15 };  // 0.20: 문헌 근거, 0.15: 기존 기본값(미확인)
 const MODE_LABEL = { single_grain: 'Single grain', single_aliquot: 'Single aliquot' };
@@ -60,23 +62,30 @@ function plotMessage(div, msg) {
 
 // ---- 그래프 공통: 모든 그리기는 plot()을 거친다. 새로 그리면 확대가 풀리므로 그때의 범위를 '전체 범위'로 기억한다.
 const ICON = {
-  zin: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M10.5 7.5v6M7.5 10.5h6"/></svg>',
-  zout: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M7.5 10.5h6"/></svg>',
+  // Apple SF Symbols의 plus/minus.magnifyingglass 비율(큰 렌즈, 짧고 굵은 손잡이)을 따라 새로 그림. 원본은 라이선스상 웹에 못 씀.
+  zin: '<svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><path class="handle" d="M15.2 15.2 20.5 20.5"/><path d="M10 6.8v6.4M6.8 10h6.4"/></svg>',
+  zout: '<svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><path class="handle" d="M15.2 15.2 20.5 20.5"/><path d="M6.8 10h6.4"/></svg>',
   exp: '<svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>',   // ↗↙ 크게 보기
   shr: '<svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>',    // ↙↗ 원래 크기
 };
 const gdOf = d => typeof d === 'string' ? $(d) : d;
 // 범례는 x축 이름 아래(축에서 78px)에 둔다. Plotly의 범례 위치는 그래프 높이 비율이라 높이에 따라 다시 계산한다.
+// showlegend: 'big' = 크게 볼 때만 범례(작은 칸에서는 숨김).
 function legendLayout(gd) {
-  const on = gd._legend, b = on ? 124 : BASE.margin.b, h = Math.max(120, (gd.clientHeight || 380) - BASE.margin.t - b);
+  const on = gd._legend === 'big' ? gd.parentElement.classList.contains('big') : gd._legend, b = on ? 124 : BASE.margin.b, h = Math.max(120, (gd.clientHeight || 380) - BASE.margin.t - b);
   return { showlegend: on, 'margin.b': b, 'legend.y': -78 / h, 'legend.yanchor': 'top' };
 }
 function plot(div, data, layout) {
   const gd = gdOf(div);
-  gd._legend = layout.showlegend !== false;
+  gd._legend = layout.showlegend ?? true;
   const L = legendLayout(gd);
-  const p = Plotly.react(gd, data, { ...layout, showlegend: L.showlegend, margin: { ...BASE.margin, b: L['margin.b'] },
-    legend: { ...BASE.legend, y: L['legend.y'], yanchor: 'top' } }, PC);
+  Plotly.react(gd, data, { ...layout, showlegend: L.showlegend, margin: { ...BASE.margin, b: L['margin.b'] },
+    yaxis: { ...layout.yaxis, automargin: true }, legend: { ...BASE.legend, y: L['legend.y'], yanchor: 'top' } }, PC);
+  // 왼쪽 여백을 y축 이름이 제목(그래프 왼쪽 끝)보다 1px 안쪽에 오도록 재서 고정한다(automargin만으로는 ±1px 어긋남).
+  // 고정하는 이유: 확대할 때마다 눈금 숫자 폭이 바뀌어 그래프가 좌우로 흔들리지 않게.
+  // 화면 밖으로 나간 글자는 getBoundingClientRect가 0에서 잘리므로, -90° 회전 전 상자(getBBox)로 왼쪽 끝을 계산한다.
+  const yt = gd.querySelector('.g-ytitle text'), dx = yt ? +yt.getAttribute('x') + yt.getBBox().y - +yt.getAttribute('y') : 1;
+  const p = Plotly.relayout(gd, { 'margin.l': gd._fullLayout._size.l + 1 - dx, 'yaxis.automargin': false });
   gd._home = { x: [...gd._fullLayout.xaxis.range], y: [...gd._fullLayout.yaxis.range] };
   if (!gd._track) addTools(gd);
   if (!gd._events) {
@@ -113,16 +122,13 @@ function addTools(gd) {
     dragThumb(gd, a);
   }
 }
-// 제목이 오른쪽 위 도구 버튼과 가로로 겹치면(좁은 칸) 상자 위쪽을 넓혀 제목을 버튼 줄 아래로 내린다.
-// 대시보드 다섯 칸은 제목 높이가 같아야 하므로 하나라도 겹치면 모두 내린다.
-// 가로 위치만 비교하므로 위쪽 여백을 바꿔도 판정이 뒤집히지 않는다.
+// 제목이 오른쪽 위 도구 버튼에 닿으면(좁은 칸) 글자 크기를 줄여 버튼 왼쪽에 맞춘다(최소 10px).
 function fitTitle(gd) {
-  const box = gd.parentElement, dash = box.parentElement.classList.contains('dash') ? box.parentElement : null;
-  const boxes = dash ? [...dash.querySelectorAll(':scope > .plotbox')] : [box];
-  const over = b => { const t = b.querySelector('.gtitle'), tools = b.querySelector('.ptools');
-    return !!t && !!tools && t.getBoundingClientRect().right > tools.getBoundingClientRect().left - 6; };
-  const crowded = boxes.some(over);
-  boxes.forEach(b => b.classList.toggle('crowded', crowded));
+  const t = gd.querySelector('.gtitle'), tools = gd.parentElement.querySelector('.ptools');
+  if (!t || !tools) return;
+  t.style.fontSize = '14px';
+  const room = tools.getBoundingClientRect().left - 8 - t.getBoundingClientRect().left, w = t.getBoundingClientRect().width;
+  if (w > room) t.style.fontSize = Math.max(10, 14 * room / w) + 'px';
 }
 function hideAxes(gd) { if (gd._track) Object.values(gd._track).forEach(({ t, tip }) => { t.classList.remove('show'); tip.classList.remove('show'); }); }
 
@@ -489,7 +495,7 @@ async function drawDR(u, token) {
                 { type: 'line', x0: d.de, x1: d.de, y0: 0, y1: nat.lxtx, line: { color: C.natural, dash: 'dot', width: 1 } });
   }
   plot('dDR', traces, { ...BASE, shapes, title: title('Dose-response curve' + (d.de == null ? ' · no De' : '')),
-    xaxis: ax({ title: '재생 선량 (s)', rangemode: 'tozero' }), yaxis: ax({ title: 'Lx/Tx', rangemode: 'tozero' }) }, PC);
+    xaxis: ax({ title: '재생 선량 (s)', rangemode: 'tozero' }), yaxis: ax({ title: 'Lx/Tx', rangemode: 'tozero' }), showlegend: 'big' }, PC);
 }
 
 function drawHist(u) {
