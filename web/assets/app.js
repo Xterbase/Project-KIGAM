@@ -16,11 +16,11 @@ const C = {
 // 기본 도구 막대는 숨긴다. 조작: 드래그 = 상자 확대, 더블클릭 = 원래대로, 도구는 그래프 상자 오른쪽 위의 돋보기·크게 보기뿐.
 const PC = { responsive: true, displaylogo: false, displayModeBar: false, doubleClick: 'reset', showTips: false };
 const AX = { gridcolor: C.line, griddash: 'dot', zeroline: false, linecolor: C.ink, linewidth: 0.5 };
-// 축 이름은 눈금 숫자에서 30px 띄운다(그 틈에 확대 가이드 선이 들어감). 아래 여백도 그만큼 넓다.
+// 축 이름: 눈금 숫자(12px)보다 1px 큰 13px 굵게, 눈금 숫자에서 4px만 띄운다(그래프 영역 우선).
 // 왼쪽 여백은 automargin으로 y축 이름이 그래프 왼쪽 끝(제목 왼쪽 + 1px)에 오게 잡는다(plot()에서 고정).
-const ax = o => ({ ...AX, ...o, ...(typeof o.title === 'string' ? { title: { text: o.title, standoff: 30 } } : {}) });
+const ax = o => ({ ...AX, ...o, ...(typeof o.title === 'string' ? { title: { text: o.title, standoff: 4, font: { size: 13, weight: 'bold' } } } : {}) });
 const BASE = {
-  margin: { l: 1, r: 18, t: 40, b: 70 }, font: { family: C.font, size: 12, color: C.ink },
+  margin: { l: 1, r: 18, t: 40, b: 42 }, font: { family: C.font, size: 12, color: C.ink },
   paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', legend: { orientation: 'h', y: -0.22 },
 };
 // 제목은 도구 버튼과 같은 줄(왼쪽 위). 길면 fitTitle()이 글자를 줄인다.
@@ -69,11 +69,16 @@ const ICON = {
   shr: '<svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>',    // ↙↗ 원래 크기
 };
 const gdOf = d => typeof d === 'string' ? $(d) : d;
-// 범례는 x축 이름 아래(축에서 78px)에 둔다. Plotly의 범례 위치는 그래프 높이 비율이라 높이에 따라 다시 계산한다.
+// 범례는 x축 이름 아래(축에서 46px)에 둔다. Plotly의 범례 위치는 그래프 높이 비율이라 높이에 따라 다시 계산한다.
 // showlegend: 'big' = 크게 볼 때만 범례(작은 칸에서는 숨김).
 function legendLayout(gd) {
-  const on = gd._legend === 'big' ? gd.parentElement.classList.contains('big') : gd._legend, b = on ? 124 : BASE.margin.b, h = Math.max(120, (gd.clientHeight || 380) - BASE.margin.t - b);
-  return { showlegend: on, 'margin.b': b, 'legend.y': -78 / h, 'legend.yanchor': 'top' };
+  const on = gd._legend === 'big' ? gd.parentElement.classList.contains('big') : gd._legend, b = on ? 96 : BASE.margin.b, h = Math.max(120, (gd.clientHeight || 380) - BASE.margin.t - b);
+  return { showlegend: on, 'margin.b': b, 'legend.y': -46 / h, 'legend.yanchor': 'top' };
+}
+// 대시보드의 작은 칸은 그래프 영역(축 안쪽)을 정사각형으로: 칸 높이 = 영역 폭 + 위·아래 여백. 크게 보기·다른 그래프는 CSS 높이 그대로.
+function squareH(gd, l = gd._fullLayout.margin.l) {
+  const small = gd.parentElement.parentElement.classList.contains('dash') && !gd.parentElement.classList.contains('big');
+  gd.style.height = small ? Math.round(gd.clientWidth - l - BASE.margin.r + BASE.margin.t + legendLayout(gd)['margin.b']) + 'px' : '';
 }
 function plot(div, data, layout) {
   const gd = gdOf(div);
@@ -85,7 +90,9 @@ function plot(div, data, layout) {
   // 고정하는 이유: 확대할 때마다 눈금 숫자 폭이 바뀌어 그래프가 좌우로 흔들리지 않게.
   // 화면 밖으로 나간 글자는 getBoundingClientRect가 0에서 잘리므로, -90° 회전 전 상자(getBBox)로 왼쪽 끝을 계산한다.
   const yt = gd.querySelector('.g-ytitle text'), dx = yt ? +yt.getAttribute('x') + yt.getBBox().y - +yt.getAttribute('y') : 1;
-  const p = Plotly.relayout(gd, { 'margin.l': gd._fullLayout._size.l + 1 - dx, 'yaxis.automargin': false });
+  const l = gd._fullLayout._size.l + 1 - dx;
+  squareH(gd, l);
+  const p = Plotly.relayout(gd, { 'margin.l': l, 'yaxis.automargin': false, autosize: true });
   gd._home = { x: [...gd._fullLayout.xaxis.range], y: [...gd._fullLayout.yaxis.range] };
   if (!gd._track) addTools(gd);
   if (!gd._events) {
@@ -227,6 +234,7 @@ function toggleBig(box) {
     const e = b.querySelector('.ptools .exp'), big = b.classList.contains('big');
     if (e) { e.innerHTML = ICON[big ? 'shr' : 'exp']; e.title = big ? '원래 크기' : '크게 보기'; }
     const gd = b.querySelector('.plot');
+    if (gd.data) squareH(gd);
     if (gd.data) Plotly.Plots.resize(gd).then(() => Plotly.relayout(gd, legendLayout(gd)));   // 범례 위치는 새 높이로 그린 뒤에 계산
   });
   if (run) drawRadial(U()[sel]);   // 방사형 호는 영역 크기에 맞춰 다시 계산
@@ -512,7 +520,7 @@ function drawHist(u) {
     hovertemplate: '%{customdata} s: %{y}개<extra>' + name + '</extra>' });
   const shapes = u.de == null ? [] : [{ type: 'line', x0: u.de, x1: u.de, y0: 0, y1: 1, yref: 'paper', line: { color: C.ink, width: 1.5, dash: 'dash' } }];
   plot('dHist', [bar(no, `Reject (${no.length})` + (noDe ? ` · De 계산 불가 ${noDe}개 제외` : ''), C.fail), bar(ok, `Accept (${ok.length})`, C.pass)],
-    { ...BASE, barmode: 'stack', shapes, title: title('Histogram'), xaxis: ax({ title: 'De (s)' }), yaxis: ax({ title: '개수' }) }, PC);
+    { ...BASE, barmode: 'stack', shapes, title: title('Histogram'), xaxis: ax({ title: 'De (s)' }), yaxis: ax({ title: '개수' }), showlegend: 'big' }, PC);
 }
 
 // 가중 히스토그램(Analyst의 Weighted histogram): Accept한 De마다 넓이 1인 가우스 곡선(폭 = De 오차)을 그려 더한다.
@@ -527,7 +535,7 @@ function drawWHist(u) {
   const shapes = u.de == null ? [] : [{ type: 'line', x0: u.de, x1: u.de, y0: 0, y1: 1, yref: 'paper', line: { color: C.ink, width: 1.5, dash: 'dash' } }];
   plot('dWHist', [{ x, y, mode: 'lines', fill: 'tozeroy', fillcolor: 'rgba(0,158,115,0.15)', line: { color: C.pass, width: 1.5 },
     name: `Accept (${P.length})`, hovertemplate: '%{x:.0f} s: %{y:.3g}<extra></extra>' }],
-    { ...BASE, shapes, title: title('Weighted histogram'), xaxis: ax({ title: 'De (s)' }), yaxis: ax({ title: '밀도 (1/s)', rangemode: 'tozero' }) });
+    { ...BASE, shapes, title: title('Weighted histogram'), xaxis: ax({ title: 'De (s)' }), yaxis: ax({ title: '밀도 (1/s)', rangemode: 'tozero' }), showlegend: 'big' });
 }
 
 // 방사형 그래프. 원점에서 뻗는 직선 하나가 De 값 하나다(기울기 = log De − log 중심값).
@@ -543,7 +551,7 @@ function drawRadial(u) {
   const ticks = []; for (let v = Math.max(step, Math.floor(lo / step) * step); v <= Math.ceil(hi / step) * step + 1e-9; v += step) ticks.push(v);
   const selPt = run.dec[sel] ? P.findIndex(p => Math.abs(p.de - u.de) < 1e-6) : -1;
   const layout = Y => ({ ...BASE, title: title('Radial plot'),
-    xaxis: ax({ title: '정밀도 (1/상대오차)', range: [0, X] }), yaxis: ax({ title: '표준화 거리', range: [-Y, Y] }) });
+    xaxis: ax({ title: '정밀도 (1/상대오차)', range: [0, X] }), yaxis: ax({ title: '표준화 거리', range: [-Y, Y] }), showlegend: 'big' });
   const pts = { x: P.map(p => p.radial_x), y: P.map(p => p.radial_y), mode: 'markers', name: 'Accept한 De', marker: { color: C.pass, size: 9 },
     text: P.map(p => `De ${fmt(p.de)} ± ${fmt(p.de_error)} s`), hovertemplate: '%{text}<extra></extra>' };
   let Y = Math.max(3, ...P.map(p => Math.abs(p.radial_y))) * 1.15;
@@ -675,6 +683,6 @@ fillGrains();
 go(location.hash.slice(1));
 document.fonts.ready.then(() => go(location.hash.slice(1)));   // 글꼴이 바뀌면 탭·버튼 폭이 달라지므로 다시 맞춘다
 let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => {
-  document.querySelectorAll('.plot').forEach(gd => { if (gd.data) Plotly.relayout(gd, legendLayout(gd)); });   // 그래프 높이가 바뀌면 범례 위치도 다시 계산
+  document.querySelectorAll('.plot').forEach(gd => { if (gd.data) { squareH(gd); Plotly.relayout(gd, { ...legendLayout(gd), autosize: true }); } });   // 폭이 바뀌면 정사각형 높이와 범례 위치도 다시 계산
   if (run && tab === 'calc') drawRadial(U()[sel]);
 }, 150); });
