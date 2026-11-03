@@ -72,7 +72,7 @@ body {
 body::before {
   content: ""; position: fixed; inset: -60px; z-index: -1; pointer-events: none;
   background: url("topo.svg") center / cover;
-  filter: blur(14px);
+  filter: blur(9px);
 }
 
 h1, h2, h3 { font-weight: 500; margin: 0; letter-spacing: 0; }
