@@ -68,8 +68,9 @@ if ($meta === null || $inspect === null) {
 
       <h3 id="file">업로드 파일정보</h3>
       <div class="card facts" id="facts"></div>
-      <h3>디스크 목록</h3>
+      <h3>레코드 목록</h3>
       <div class="tablewrap"><table id="discs"></table></div>
+      <div class="card cols"><span class="note">표시할 열 · 누르면 표에 추가/제거</span><div id="cols"></div></div>
 
       <h3 id="uplist">최근 업로드 목록(최근 10개 파일)</h3>
       <?php sample_table(list_samples(), $id); ?>

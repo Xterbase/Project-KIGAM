@@ -195,7 +195,12 @@ table.samples td.memo { max-width: 220px; overflow: hidden; text-overflow: ellip
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
 .facts span { display: block; color: var(--slate-smoke); font-size: 11px; }
 .facts b { display: block; font-size: 18px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
-#facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }   /* 업로드 파일정보: 2행 4열 */
+#facts { grid-template-columns: repeat(7, minmax(0, 1fr)); }   /* 업로드 파일정보: 1행 7열 */
+/* 레코드 표의 열 고르기(표 바로 아래에 붙임) */
+.cols { margin-top: 8px; display: grid; gap: 8px; }
+#cols { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-col { padding: 4px 10px; border-radius: var(--radius-panel); font-size: 12px; color: var(--forest-ink); background: rgba(120,120,128,.1); }
+.chip-col.on { background: var(--forest-ink); color: var(--bone-white); }
 #facts > .note { grid-column: 1 / -1; }
 /* 제목 줄 오른쪽 끝에 버튼(다른 파일 올리기) */
 .headrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
@@ -288,9 +293,9 @@ li.on .sub li:nth-child(4) a { transition-delay: .15s; }
 .plot.tall { height: 420px; }
 .plot .empty { display: flex; height: 100%; align-items: center; justify-content: center; color: var(--slate-smoke); font-size: 12px; }
 
-/* 그래프 도구: 돋보기 −/+ · 크게 보기(기본 Plotly 도구 막대 대신) */
+/* 그래프 도구: 크게 보기 · PNG 저장(기본 Plotly 도구 막대 대신) */
 .ptools { position: absolute; top: 10px; right: 12px; z-index: 5; display: flex; gap: 4px; }
-/* 그래프 도구(돋보기·확대·축소·크게 보기): thin 유리 버튼. 아래 그래프 선이 흐리게 비친다. */
+/* 그래프 도구(크게 보기·저장): thin 유리 버튼. 아래 그래프 선이 흐리게 비친다. */
 .ptools button { width: 26px; height: 26px; padding: 0; border-radius: var(--radius-panel); background: var(--mat-thin);
   -webkit-backdrop-filter: blur(12px) saturate(180%); backdrop-filter: blur(12px) saturate(180%);
   box-shadow: var(--glass-edge), 0 2px 8px rgba(0,0,0,.1); display: grid; place-items: center; transition: transform .35s var(--spring), background .2s; }
@@ -298,7 +303,6 @@ li.on .sub li:nth-child(4) a { transition-delay: .15s; }
 .ptools button:active { transform: scale(.88); transition-duration: .1s; }
 .ptools svg, .howto svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .ptools svg { width: 15px; height: 15px; }
-.ptools svg .handle, .howto svg .handle { stroke-width: 3; }   /* Apple 돋보기처럼 손잡이를 굵게 */
 
 /* 확대했을 때만 나타나는 축 가이드: 축 이름과 눈금 숫자 사이의 얇은 실선 + 반투명 검은 점(끌어서 이동).
    요소는 누르기 쉽게 16px 폭이고, 보이는 선은 가운데 1.5px. */
@@ -333,6 +337,9 @@ li.on .sub li:nth-child(4) a { transition-delay: .15s; }
 
 .selbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 20px; }
 .selbar .big { font-size: 20px; font-weight: 500; }
+/* 단위 이름·판정 문구는 가장 긴 경우(디스크 48 · 알갱이 100 / 수동 변경 + 경고) 폭으로 고정해 다음·Accept·Reject 버튼이 단위마다 움직이지 않게 */
+#selTitle { width: 10em; }
+#selDetail { width: 42.5em; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Accept는 초록, Reject는 빨강으로 고정. 누른 순간만 검은 테두리(.hit: 키보드로 눌렀을 때도) */
 button.btn#accBtn, button.btn#rejBtn { color: #fff; }
 button.btn#accBtn { background: color-mix(in srgb, var(--pass) 85%, transparent); }

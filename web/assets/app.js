@@ -13,7 +13,7 @@ const C = {
   ink: css('--forest-ink'), pass: css('--pass'), fail: css('--fail'), fit: css('--muted-sage'), data: css('--emerald'),
   natural: css('--indigo-accent'), muted: css('--slate-smoke'), line: css('--lichen'), moss: css('--moss'), font: css('--font'),
 };
-// 기본 도구 막대는 숨긴다. 조작: 드래그 = 상자 확대, 더블클릭 = 원래대로, 도구는 그래프 상자 오른쪽 위의 돋보기·크게 보기뿐.
+// 기본 도구 막대는 숨긴다. 조작: 드래그 = 상자 확대, 더블클릭 = 원래대로, 도구는 그래프 상자 오른쪽 위의 크게 보기·PNG 저장뿐.
 const PC = { responsive: true, displaylogo: false, displayModeBar: false, doubleClick: 'reset', showTips: false };
 const AX = { gridcolor: C.line, griddash: 'dot', zeroline: false, linecolor: C.ink, linewidth: 0.5 };
 // 축 이름: 눈금 숫자(12px)보다 1px 큰 13px 굵게, 눈금 숫자에서 4px만 띄운다(그래프 영역 우선).
@@ -62,9 +62,7 @@ function plotMessage(div, msg) {
 
 // ---- 그래프 공통: 모든 그리기는 plot()을 거친다. 새로 그리면 확대가 풀리므로 그때의 범위를 '전체 범위'로 기억한다.
 const ICON = {
-  // Apple SF Symbols의 plus/minus.magnifyingglass 비율(큰 렌즈, 짧고 굵은 손잡이)을 따라 새로 그림. 원본은 라이선스상 웹에 못 씀.
-  zin: '<svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><path class="handle" d="M15.2 15.2 20.5 20.5"/><path d="M10 6.8v6.4M6.8 10h6.4"/></svg>',
-  zout: '<svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><path class="handle" d="M15.2 15.2 20.5 20.5"/><path d="M6.8 10h6.4"/></svg>',
+  save: '<svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 17v3h16v-3"/></svg>',   // ↓ PNG 저장
   exp: '<svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>',   // ↗↙ 크게 보기
   shr: '<svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>',    // ↙↗ 원래 크기
 };
@@ -109,17 +107,16 @@ const rangeOf = (gd, a) => [...gd._fullLayout[a + 'axis'].range];
 const isZoomed = (gd, a) => { if (gd._fullLayout[a + 'axis'].autorange) return false;   // 자동 범위 = 확대 전
   const h = gd._home[a], c = rangeOf(gd, a), e = (h[1] - h[0]) * 1e-3; return c[0] > h[0] + e || c[1] < h[1] - e; };
 
-// 도구 버튼(돋보기 −/+, 대시보드 다섯 칸에는 크게 보기)과 두 축의 확대 가이드를 그래프 상자에 한 번만 붙인다.
+// 도구 버튼(대시보드 다섯 칸에는 크게 보기, 모든 그래프에 PNG 저장)과 두 축의 확대 가이드를 그래프 상자에 한 번만 붙인다.
 function addTools(gd) {
   const box = gd.parentElement, tools = el('div', null, 'ptools');
   const btn = (k, tip, fn) => { const b = el('button', null, k); b.type = 'button'; b.innerHTML = ICON[k]; b.title = tip; b.onclick = fn; tools.append(b); return b; };
-  btn('zout', '축소', () => zoomBy(gd, 1.6));
-  btn('zin', '확대(가운데 기준)', () => zoomBy(gd, 1 / 1.6));
   if (box.parentElement.classList.contains('dash')) {
     btn('exp', '크게 보기', () => toggleBig(box));
     // 더블클릭 직전의 확대 여부를 기억해 둔다(더블클릭 이벤트 때는 Plotly가 이미 범위를 되돌린 뒤라서). 쓰는 곳은 plot()의 plotly_doubleclick.
     box.addEventListener('mousedown', () => { gd._wasZoomed = !!gd._home && (isZoomed(gd, 'x') || isZoomed(gd, 'y')); }, true);
   }
+  btn('save', 'PNG로 저장', () => savePng(gd));
   box.append(tools);
   gd._track = {};
   for (const a of ['x', 'y']) {
@@ -212,16 +209,12 @@ function tween(gd, to) {
   requestAnimationFrame(step);
 }
 
-// 돋보기: 지금 보이는 영역의 가운데를 기준으로 f배. 전체 범위를 넘으면 전체 범위에서 멈춘다.
-function zoomBy(gd, f) {
+// PNG 저장: 지금 보이는 범위·크기 그대로, 배경은 흰색(화면에서는 투명), 2배 해상도. 파일 이름 = 시료 파일_그래프 제목.
+function savePng(gd) {
   if (!gd.data) return;
-  const to = {};
-  for (const a of ['x', 'y']) {
-    const h = gd._home[a], c = rangeOf(gd, a), mid = (c[0] + c[1]) / 2, w = Math.min((c[1] - c[0]) * f, h[1] - h[0]);
-    const lo = Math.min(Math.max(mid - w / 2, h[0]), h[1] - w);
-    to[a] = [lo, lo + w];
-  }
-  tween(gd, to);
+  const name = (B.file.replace(/\.[^.]+$/, '') + '_' + (gd.layout.title?.text || gd.id)).replace(/<[^>]+>/g, '').replace(/[^\w가-힣.-]+/g, '_');
+  Plotly.downloadImage({ data: gd.data, layout: { ...gd.layout, paper_bgcolor: '#fff', plot_bgcolor: '#fff' } },
+    { format: 'png', width: gd.clientWidth, height: gd.clientHeight, scale: 2, filename: name });
 }
 
 // 크게 보기: 나머지 넷은 위 1행 4열, 고른 그래프는 그 아래 전체 폭. 칸이 바뀌는 움직임은 FLIP으로 부드럽게.
@@ -255,8 +248,8 @@ document.querySelectorAll('.howto').forEach(h => h.innerHTML =
   '<span><b>드래그</b> 그 구간 확대</span>' +
   '<span>확대 중에는 축 이름과 눈금 사이의 <span class="dotdemo"></span> 점을 끌어 이동</span>' +
   '<span><b>더블클릭</b> 원래대로</span>' +
-  `<span>${ICON.zout}${ICON.zin} 가운데 기준 축소·확대</span>` +
-  (h.nextElementSibling.classList.contains('dash') ? `<span>${ICON.exp} 크게 보기(고른 그래프가 아래에 크게 · 더블클릭 또는 Esc로 복귀)</span>` : ''));
+  (h.nextElementSibling.classList.contains('dash') ? `<span>${ICON.exp} 크게 보기(고른 그래프가 아래에 크게 · 더블클릭 또는 Esc로 복귀)</span>` : '') +
+  `<span>${ICON.save} PNG로 저장</span>`);
 
 // ---- 파일 구성에서 바로 얻는 것
 const byDisc = {};
@@ -306,20 +299,46 @@ function renderContext() {
 
 // ---- 01 파일
 function renderFile() {
-  // 2행 4열: 1행은 파일 자체, 2행은 파일 구성
-  const facts = [[B.file, '파일'], [SG ? 'single-grain' : 'single-aliquot', '측정 방식'], [NCH, '채널 수(OSL)'], [I.object_name || '—', 'RDA 객체'],
+  // 1행 7열
+  const facts = [[B.file, '파일'], [SG ? 'single-grain' : 'single-aliquot', '측정 방식'], [NCH, '채널 수(OSL)'],
     [I.n_positions, '디스크'], [SG ? I.grains.length : '—', '알갱이'], [I.records.length, '레코드'], [arr(I.record_types).join(', '), '레코드 종류']];
   facts.forEach(([v, k]) => { const d = el('div'); d.append(el('span', k), el('b', v)); $('facts').append(d); });
   $('reupBtn').onclick = () => { $('upForm').hidden = false; $('reupBtn').hidden = true; };   // 끌어다 놓기 영역을 처음 상태로 다시 보임
   if (arr(I.ignored_objects).length) $('facts').append(el('p', `RDA 안의 다른 객체 ${arr(I.ignored_objects).join(', ')}는 사용하지 않음.`, 'note'));
 
-  const t = $('discs'), h = el('tr'); ['디스크', '알갱이 수', '알갱이 번호'].forEach(x => h.append(el('th', x))); t.append(h);
-  Object.entries(byDisc).forEach(([p, gs]) => {
-    const r = el('tr');
-    [p, SG ? gs.length : '—', SG ? gs.join(', ') : '디스크 단위 측정'].forEach(x => r.append(el('td', x)));
-    t.append(r);
+  // Analyst처럼 표시할 열을 아래 상자에서 골라 레코드 표에 붙인다. 파일에 없는 필드(예전 inspect.json)는 목록에서 뺀다.
+  const pick = $('cols'), on = new Set(['position', 'grain']);
+  COLS.filter(([k]) => k in I.records[0] && (SG || k !== 'grain')).forEach(([k, name]) => {
+    const b = el('button', name, 'chip-col'); b.type = 'button'; b.classList.toggle('on', on.has(k));
+    b.onclick = () => { on.has(k) ? on.delete(k) : on.add(k); b.classList.toggle('on'); drawRecs(); };
+    pick.append(b);
   });
+  // shortcut: 레코드 전부를 DOM에 그림(882개는 즉시), 수만 개 파일이면 페이지 나눔이 필요
+  function drawRecs() {
+    const cols = [['record_index', 'Rec.#'], ...COLS.filter(([k]) => on.has(k))], t = $('discs'), h = el('tr');
+    cols.forEach(([, name]) => h.append(el('th', name))); t.replaceChildren(h);
+    I.records.forEach((rec, i) => { const r = el('tr'); cols.forEach(([k]) => r.append(el('td', k === 'record_index' ? i + 1 : rec[k] ?? '—'))); t.append(r); });
+  }
+  drawRecs();
 }
+// 표에 붙일 수 있는 열: Analyst의 Display Information 목록과 같은 이름·순서. 값은 inspect records의 BIN 필드(read_BIN2R) 그대로.
+// Integral 1–4는 read_BIN2R이 읽지 않는 필드라 빠짐. 파일 버전에 없는 필드는 renderFile()에서 목록에서 뺀다.
+const COLS = [['position', 'Position'], ['grain', 'Grain number'], ['run', 'Run Number'], ['set', 'Set Number'], ['dtype', 'Data Type'],
+  ['irr_time', 'Irrad. Time'], ['npoints', 'Num. Points'], ['ltype', 'Lumin. Type'], ['low', 'Low'], ['high', 'High'], ['rate', 'Rate'],
+  ['temperature', 'Temperature'], ['xcoord', 'X Coordinate'], ['ycoord', 'Y Coordinate'], ['toldelay', 'Chn. Delay'], ['tolon', 'Chn. On'],
+  ['toloff', 'Chn. off'], ['sample', 'Sample'], ['comment', 'Comment'], ['lightsource', 'Light Source'], ['lpower', 'Light Power'],
+  ['version', 'Version'], ['length', 'Length'], ['previous', 'Previous'], ['time', 'Time'], ['date', 'Date'], ['sequence', 'Sequence'],
+  ['user', 'User'], ['systemid', 'System ID'], ['irr_type', 'Irrad. Type'], ['irr_doserate', 'Irrad. Dose Rate'], ['bl_time', 'Bleach Time'],
+  ['bl_unit', 'Bleach Unit'], ['an_temp', 'Anneal Temp'], ['an_time', 'Anneal Time'], ['norm1', 'Normal. 1'], ['norm2', 'Normal. 2'],
+  ['norm3', 'Normal. 3'], ['bg', 'Background'], ['shift', 'Shift'], ['curveno', 'Curve No'], ['timetick', 'TimeTick'], ['ontime', 'On time'],
+  ['stimperiod', 'Stimulation Period'], ['gate_start', 'Gating start'], ['gate_stop', 'Gating end'], ['ptenabled', 'Photon Timer enabled'],
+  ['gate_enabled', 'PMT gating enabled'], ['timesinceirr', 'Time since Irr.'], ['deadtime', 'PMT dead time'],
+  ['maxlpower', 'Max. absolute stim. light power'], ['xrf_acqtime', 'XRF acquisition time'], ['xrf_hv', 'XRF X-ray high voltage'],
+  ['xrf_curr', 'XRF X-ray current'], ['xrf_deadtimef', 'XRF dead time fraction'], ['dtenabled', 'Dead time correction enabled'],
+  ['irr_doserateerr', 'Irrad. Dose Rate error'], ['detector_id', 'Detection unit'], ['lowerfilter_id', 'Filter 1'], ['upperfilter_id', 'Filter 2'],
+  ['enoisefactor', 'Excess noise factor'], ['markpos_x1', 'Marker 1 X'], ['markpos_y1', 'Marker 1 Y'], ['markpos_x2', 'Marker 2 X'],
+  ['markpos_y2', 'Marker 2 Y'], ['markpos_x3', 'Marker 3 X'], ['markpos_y3', 'Marker 3 Y'], ['rectype', 'Record type'],
+  ['extr_start', 'Extraction start'], ['extr_end', 'Extraction end']];
 
 // ---- 공통: 곡선 그리기(신호 구간은 모스 초록, 배경 구간은 회색 띠)
 function drawCurve(div, c, text, sig, bg) {

@@ -47,11 +47,9 @@ suppressPackageStartupMessages({
     unit_key <- paste(meta$POSITION, meta$GRAIN)
     record_index <- ave(seq_len(nrow(meta)), unit_key, FUN = seq_along)
 
-    cols <- intersect(
-      c("ID", "POSITION", "GRAIN", "RUN", "SET", "LTYPE", "DTYPE", "IRR_TIME", "NPOINTS",
-        "LOW", "HIGH", "TEMPERATURE", "AN_TEMP", "AN_TIME", "LIGHTSOURCE", "SAMPLE", "COMMENT"),
-      colnames(meta)
-    )
+    # BIN 머리 필드를 모두 넘긴다(업로드 탭에서 Analyst처럼 열을 골라 보기). 값은 read_BIN2R이 읽은 그대로.
+    # SEL은 Luminescence의 선택 표시(파일 필드 아님), 내부 열이라 뺀다.
+    cols <- setdiff(colnames(meta), "SEL")
     records <- data.frame(record_index = record_index, meta[, cols, drop = FALSE])
     names(records) <- tolower(names(records))
 
