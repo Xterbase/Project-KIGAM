@@ -197,10 +197,12 @@ table.samples td.memo { max-width: 220px; overflow: hidden; text-overflow: ellip
 .facts b { display: block; font-size: 18px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
 #facts { grid-template-columns: repeat(7, minmax(0, 1fr)); }   /* 업로드 파일정보: 1행 7열 */
 /* 레코드 표의 열 고르기(표 바로 아래에 붙임) */
-.cols { margin-top: 8px; display: grid; gap: 8px; }
-#cols { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip-col { padding: 4px 10px; border-radius: var(--radius-panel); font-size: 12px; color: var(--forest-ink); background: rgba(120,120,128,.1); }
-.chip-col.on { background: var(--forest-ink); color: var(--bone-white); }
+.cols { margin-top: 8px; }
+.cols .headrow { margin-bottom: 8px; }
+/* Analyst의 Display Information처럼 한 줄에 한 항목, 목록 안에서 스크롤 */
+#cols { display: grid; max-height: 240px; overflow-y: auto; border-radius: var(--radius-panel); box-shadow: inset 0 0 0 1px var(--mist); padding: 4px 0; }
+#cols label { display: flex; align-items: center; gap: 8px; padding: 3px 12px; font-size: 13px; cursor: pointer; }
+#cols label:hover { background: rgba(120,120,128,.08); }
 #facts > .note { grid-column: 1 / -1; }
 /* 제목 줄 오른쪽 끝에 버튼(다른 파일 올리기) */
 .headrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px; }

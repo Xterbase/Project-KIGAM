@@ -309,10 +309,11 @@ function renderFile() {
   // Analyst처럼 표시할 열을 아래 상자에서 골라 레코드 표에 붙인다. 파일에 없는 필드(예전 inspect.json)는 목록에서 뺀다.
   const pick = $('cols'), on = new Set(['position', 'grain']);
   COLS.filter(([k]) => k in I.records[0] && (SG || k !== 'grain')).forEach(([k, name]) => {
-    const b = el('button', name, 'chip-col'); b.type = 'button'; b.classList.toggle('on', on.has(k));
-    b.onclick = () => { on.has(k) ? on.delete(k) : on.add(k); b.classList.toggle('on'); drawRecs(); };
-    pick.append(b);
+    const c = el('input'), l = el('label'); c.type = 'checkbox'; c.checked = on.has(k); c.dataset.k = k;
+    c.onchange = () => { c.checked ? on.add(k) : on.delete(k); drawRecs(); };
+    l.append(c, name); pick.append(l);
   });
+  $('colsNone').onclick = () => { on.clear(); pick.querySelectorAll('input').forEach(c => { c.checked = false; }); drawRecs(); };
   // shortcut: 레코드 전부를 DOM에 그림(882개는 즉시), 수만 개 파일이면 페이지 나눔이 필요
   function drawRecs() {
     const cols = [['record_index', 'Rec.#'], ...COLS.filter(([k]) => on.has(k))], t = $('discs'), h = el('tr');
